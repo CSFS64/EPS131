@@ -50,7 +50,7 @@ def read_phase_text(text, event_id="38457511", station_codes=None):
         if phase not in station_picks or seconds < station_picks[phase]["secondsAfterOrigin"]:
             station_picks[phase] = {"secondsAfterOrigin": seconds, "channel": fields[2], "latitude": latitude, "longitude": longitude}
     if origin is None:
-        raise ValueError("Matching event header with an origin UTC timestamp was not found")
+        raise ValueError("Matching event header with an origin UTC timestamp was not found; sample=" + repr(text[:750]))
     return origin, picks
 
 
