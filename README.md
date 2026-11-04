@@ -1,4 +1,4 @@
-# EEW Lab V0.4.3
+# EEW Lab V0.4.4
 
 [Open website](https://csfs64.github.io/EPS131/) · [Methods](docs/methodology.md)
 
@@ -89,3 +89,7 @@ Pointer hover uses a contrasting fill on action controls. An active press uses a
 ## Interface details
 
 The interface uses Windows system typography, 1px control borders, subtle inset bevels and separate hover, pressed, selected and keyboard focus states. Model accuracy is a bordered sheet; Alert timing uses a flat left-side rail; Stations uses a folder-style header and list; Observed residuals uses a rounded data panel. Inner numerical results and parameter rows are unboxed to reduce repeated nested frames. No research data or computational parameters are changed by this styling revision.
+
+## Interface revision
+
+V0.4.4 uses a flat institutional web-interface treatment, grounded in ALEKS-like selection and government design-system button states. Desktop-style bevels, decorative highlights and press shadows were removed. Distinct default, hover, pressed, selected and keyboard-focus states remain visible. No seismic models or observational data changed.
