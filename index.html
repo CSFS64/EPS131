@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#087f90">
-<title>EEW Lab | Ridgecrest 2019</title>
+<title>EEW Lab | Earthquake travel-time analysis</title>
 <link rel="stylesheet" href="./css/style.css">
 </head>
 <body>
@@ -12,8 +12,8 @@
   <header class="topbar">
     <a class="brand" href="./" aria-label="EEW Lab home">EEW <span>LAB</span></a>
     <span class="bar-separator"></span>
-    <span class="project-title">Ridgecrest 2019</span>
-    <span class="event-tag">Mw 7.1</span>
+    <span class="project-title">Seismic arrival analysis</span>
+    <span class="event-tag" id="event-tag">Mw 7.1</span>
     <div class="top-actions"><span id="load-state" class="load-state">Loading</span><a class="source-link" href="https://github.com/CSFS64/EPS131" target="_blank" rel="noopener">Source ↗</a></div>
   </header>
   <div class="main-grid">
@@ -26,10 +26,11 @@
       </div>
       <div class="side-scroll">
         <section id="panel-simulation" class="side-panel active" role="tabpanel" aria-labelledby="tab-simulation">
-          <div class="section-label">SOURCE</div>
-          <div class="stat-grid"><div><small>Origin UTC</small><b>06 Jul 2019 03:19:53</b></div><div><small>Depth</small><b>8.0 km</b></div></div>
+          <div class="section-label">EVENT</div>
+          <label class="form-label" for="event-select">Historical event</label><select id="event-select" class="field-select"><option value="ci38457511">Ridgecrest 2019 · Mw 7.1</option><option value="ci38443183">Ridgecrest 2019 · Mw 6.4</option></select>
+          <div class="stat-grid"><div><small>Origin UTC</small><b id="origin-readout">06 Jul 2019 03:19:53</b></div><div><small>Depth</small><b id="depth-readout">8.0 km</b></div></div>
           <div class="section-label">VELOCITY MODEL</div>
-          <div class="readout-row"><span>Constant velocity</span><strong>Baseline</strong></div>
+          <label class="form-label" for="model-select">Travel-time model</label><select id="model-select" class="field-select"><option value="constant">Constant velocity</option><option value="1d" disabled>iasp91 · TauP 1D (loading)</option><option value="3d" disabled>Ridgecrest tomography · 3D (unavailable)</option></select><div class="data-status model-status" id="model-status">Baseline: fixed velocities</div>
           <div class="slider-field"><div class="field-head"><label for="vp">P velocity</label><output id="vp-out">6.0 km/s</output></div><input id="vp" type="range" min="4.5" max="7.5" step="0.1" value="6"></div>
           <div class="slider-field"><div class="field-head"><label for="vs">S velocity</label><output id="vs-out">3.5 km/s</output></div><input id="vs" type="range" min="2.5" max="4.5" step="0.1" value="3.5"></div>
           <div class="section-label">LAYERS</div>
@@ -48,10 +49,10 @@
           <div id="validation-status" class="data-status">No observations loaded</div>
           <div class="stat-grid validation-stats"><div><small>P MAE</small><b id="p-mae">—</b></div><div><small>S MAE</small><b id="s-mae">—</b></div><div><small>P bias</small><b id="p-bias">—</b></div><div><small>S bias</small><b id="s-bias">—</b></div></div>
           <div class="section-label">IMPORT</div>
-          <label for="phase-file" class="file-button">Select .phase or .json file</label><input type="file" id="phase-file" accept=".phase,.txt,.json,text/plain,application/json" hidden>
+          <button class="file-button" type="button" id="phase-file-trigger">Import .phase or .json</button><input type="file" id="phase-file" accept=".phase,.txt,.json,text/plain,application/json" hidden>
           <div class="file-name" id="import-state">—</div>
-          <a class="external-row" href="https://d2t2xxda3aznuq.cloudfront.net/data/cloud.html" target="_blank" rel="noopener">SCEDC data archive ↗</a>
-          <div class="section-label">PICK COMPARISON</div>
+          <a class="external-row" href="https://scedc.caltech.edu/data/cloud.html" target="_blank" rel="noopener">SCEDC data ↗</a>
+          <div class="section-label">MODEL COMPARISON</div><div class="data-table-scroll"><table class="compact-table" aria-label="Model comparison"><thead><tr><th>Model</th><th>P MAE</th><th>S MAE</th></tr></thead><tbody id="comparison-rows"><tr><td colspan="3">Loading</td></tr></tbody></table></div><div class="section-label">PICK COMPARISON</div>
           <div class="data-table-scroll"><table class="compact-table" aria-label="Observed and modeled arrivals"><thead><tr><th>Station</th><th>Phase</th><th>Δt</th></tr></thead><tbody id="pick-rows"><tr><td colspan="3">No data</td></tr></tbody></table></div>
         </section>
         <section id="panel-latency" class="side-panel" role="tabpanel" aria-labelledby="tab-latency" hidden>
@@ -65,11 +66,11 @@
           <div class="button-group buttons-spaced"><button class="simple-button" id="reset-latency">Reset</button><button class="simple-button primary" id="export-results">Export CSV</button></div>
         </section>
       </div>
-      <div class="sidebar-footer"><a href="./docs/methodology.md" target="_blank">Methods ↗</a><span>V0.2</span></div>
+      <div class="sidebar-footer"><a href="./docs/methodology.md" target="_blank">Methods ↗</a><span>V0.3</span></div>
     </aside>
     <main class="workspace">
       <section class="map-stage" aria-label="Seismic propagation map">
-        <canvas id="map" aria-label="Map of wavefronts and seismic stations"></canvas>
+        <canvas id="map" aria-label="Map of earthquake wave arrivals and seismic stations"></canvas>
         <div class="map-toolbar" role="group" aria-label="Basemap selection"><button class="map-mode selected" data-base="satellite" aria-pressed="true">Satellite</button><button class="map-mode" data-base="street" aria-pressed="false">Street</button><button class="map-mode" data-base="grid" aria-pressed="false">Grid</button></div>
         <div class="map-zoom"><button id="zoom-in" title="Zoom in" aria-label="Zoom in">+</button><button id="zoom-out" title="Zoom out" aria-label="Zoom out">−</button><button id="recenter" title="Reset view" aria-label="Reset map">⌖</button></div>
         <div class="map-legend"><span><i class="line-swatch p"></i>P</span><span><i class="line-swatch s"></i>S</span><span><i class="dot-swatch"></i>Stations</span></div>

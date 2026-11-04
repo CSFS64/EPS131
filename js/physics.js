@@ -25,28 +25,34 @@ export function destination(lat, lon, bearingDegrees, km) {
   const l2 = l1 + Math.atan2(Math.sin(bearing) * Math.sin(d) * Math.cos(p1), Math.cos(d) - Math.sin(p1) * Math.sin(p2));
   return { latitude: p2 * RAD, longitude: ((l2 * RAD + 540) % 360) - 180 };
 }
-export function calculateNetwork(data, params, disabled = new Set()) {
+export function calculateNetwork(data, params, disabled = new Set(), predictions = null) {
   const {event} = data;
+  const compute = (place, phase) => {
+    if (predictions !== null) {
+      const value = predictions[place.id]?.[phase];
+      return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+    }
+    return travelTimeS(event, place, phase === 'p' ? params.vpKmS : params.vsKmS);
+  };
   const stations = data.stations.map(station => {
     const distanceKm = haversineKm(event.latitude, event.longitude, station.latitude, station.longitude);
-    const p = travelTimeS(event, station, params.vpKmS);
-    const s = travelTimeS(event, station, params.vsKmS);
+    const p = compute(station, 'p');
+    const s = compute(station, 's');
     return {...station, distanceKm, p, s,
-      available: p + params.detectionDelayS + params.networkDelayS,
+      available: p === null ? null : p + params.detectionDelayS + params.networkDelayS,
       enabled: !disabled.has(station.id) };
-  }).sort((a, b) => a.available - b.available);
-  const triggers = stations.filter(station => station.enabled);
+  }).sort((a,b) => (a.available ?? Infinity) - (b.available ?? Infinity));
+  const triggers = stations.filter(station => station.enabled && station.available !== null);
   const kth = triggers[params.triggersRequired - 1];
   const issue = kth ? kth.available + params.processingDelayS : null;
   const delivered = issue === null ? null : issue + params.deliveryDelayS;
   const cities = data.cities.map(city => {
-    const p = travelTimeS(event, city, params.vpKmS);
-    const s = travelTimeS(event, city, params.vsKmS);
-    return {...city, p, s, distanceKm: haversineKm(event.latitude, event.longitude, city.latitude, city.longitude),
-      lead: delivered === null ? null : s - delivered};
+    const p = compute(city, 'p');
+    const s = compute(city, 's');
+    return {...city,p,s,distanceKm:haversineKm(event.latitude,event.longitude,city.latitude,city.longitude),
+      lead:delivered === null || s === null ? null : s - delivered};
   });
-  return {stations, issue, delivered, cities, params, triggered: triggers.length, kthStation: kth ?? null,
-    firstStation: triggers[0] ?? null};
+  return {stations, issue, delivered, cities, params, triggered: triggers.length, kthStation: kth ?? null, firstStation: triggers[0] ?? null};
 }
 export function fmtSeconds(s) { return s === null || !Number.isFinite(s) ? '—' : `${s.toFixed(1)} s`; }
 export function fmtSignedSeconds(s) { return s === null || !Number.isFinite(s) ? '—' : `${s > 0 ? '+' : ''}${s.toFixed(1)} s`; }

@@ -36,3 +36,13 @@ test('greater delivery delay reduces lead by exact delta',()=>{
  const b=calculateNetwork(data,{...data.model,deliveryDelayS:data.model.deliveryDelayS+4});
  assert.ok(Math.abs((a.cities[0].lead-b.cities[0].lead)-4)<1e-9);
 });
+test('loaded 1D predictions replace baseline arrivals without mixing missing values',()=>{
+ const payload={...data,event:{...data.event,id:'ci38443183',latitude:35.705334,longitude:-117.50383,depthKm:10.5}};
+ const predictions={};
+ for(const site of [...payload.stations,...payload.cities])predictions[site.id]={p:4,s:7};
+ predictions[payload.stations[0].id]={p:null,s:null};
+ const result=calculateNetwork(payload,payload.model,new Set(),predictions);
+ assert.equal(result.triggered,payload.stations.length-1);
+ assert.ok(result.stations.some(x=>x.p===null));
+ assert.equal(result.cities[0].s,7);
+});

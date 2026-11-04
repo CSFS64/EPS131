@@ -57,7 +57,7 @@ export function evaluateArrivals(stations, obsMap) {
     const o = obsMap?.get(st.id);
     if (!o) continue;
     for (const phase of ['p','s']) {
-      if (o[phase] === undefined) continue;
+      if (o[phase] === undefined || st[phase] === null || !Number.isFinite(st[phase])) continue;
       comparisons.push({id:st.id,phase,observed:o[phase],predicted:st[phase],residual:st[phase]-o[phase],distanceKm:st.distanceKm});
     }
   }

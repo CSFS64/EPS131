@@ -1,46 +1,49 @@
-# EEW Lab V0.2 — Methods
+# Methods and data provenance · V0.3
 
-## Event and stations
+## Events
 
-- USGS catalog event `ci38457511`, 2019-07-06 03:19:53 UTC, Mw 7.1, depth 8.0 km, 35.770°N, 117.599°W.
-- Station subset: 15 CI broadband station coordinates used in a Ridgecrest study published by NCEDC. This subset is not a historical ShakeAlert operational station inventory.
-- City points: approximate geographic centers, not census-weighted population estimates.
+USGS events:
 
-## Baseline propagation
+- [ci38457511](https://earthquake.usgs.gov/earthquakes/eventpage/ci38457511): Mw 7.1, 2019-07-06 03:19:53 UTC, 35.770 N, -117.599 W, 8 km depth.
+- [ci38443183](https://earthquake.usgs.gov/earthquakes/eventpage/ci38443183): Mw 6.4, 2019-07-04 17:33:49 UTC, approximately 35.705334 N, -117.50383 W, 10.5 km depth.
 
-V0.2 retains a single point hypocenter with straight rays and spatially constant crustal P and S wave speeds. The geodesic distance is approximated with the haversine great-circle distance. The hypocentral range is `R = sqrt(d_surface² + depth²)`. Predicted phase arrival is `R / velocity`. A surface wavefront at elapsed time `t` is only shown for `v * t >= depth`; its horizontal radius is `sqrt((v*t)² - depth²)`.
+15 CI broadband station coordinates are taken from a published NCEDC Ridgecrest mapping subset. Membership in this scientific selection does not prove operational participation or connectivity in the ShakeAlert network. City coordinates are approximate geographic centers, not population-weighted points.
 
-Defaults are `Vp = 6.0 km/s`, `Vs = 3.5 km/s`, both illustrative. Sliders change these assumptions; they are not fitted measurements of Ridgecrest's crustal velocity. V0.2 does not include layered velocity structure, 3D heterogeneity or finite-fault rupture.
+## Observed arrival picks
 
-## Station alert model
+The Southern California Earthquake Data Center (SCEDC) publishes event-phase STP files. The fetch script downloads each event archive and selects the earliest recorded nonnegative P or S pick (up to 300 s) for station codes in the selected list. Phase picks may have different channel types and onset quality. The script converts SCEDC-origin-relative times to a chosen USGS origin using an explicit stored origin time offset. Missing picks remain missing.
 
-For each enabled station `i`, `available_i = P_i + detection_delay + telemetry_delay`. The alarm issue time is the time of the *k*th earliest available station plus processing delay. User receipt time adds delivery delay. A city lead time is predicted first S-arrival minus simulated user receipt. The algorithm is an intentionally simplified hypothetical trigger chain, not a reimplementation of ShakeAlert. No actual historical alarm or phone alert times are incorporated.
+## Constant-velocity reference
 
-## Observed phase validation
+Surface distance d uses a haversine great-circle approximation. With hypocentral depth h and chosen velocities Vp and Vs, arrival time is sqrt(d²+h²)/V. The curved Earth's structure, station elevation, site effects and finite fault rupture are not represented.
 
-SCEDC publishes Ridgecrest 2019 phase picks in a publicly hosted STP text file. The optional local pipeline fetches the exact file, selects matching CI station codes, takes the earliest nonnegative P and S pick on the available channels (within 300 seconds), and converts time-after-SCEDC-origin to time-after-the-referenced-USGS-origin. The original origin timestamps and their difference are stored for provenance.
+## TauP 1D model
 
-On the website, residual is `predicted - observed`; therefore positive residual means the model arrival is later than the observed pick. `MAE = mean(|residual|)`, `bias = mean(residual)`, and `RMSE = sqrt(mean(residual²))`. Counts are phase-specific; only stations with actual picks are included. A missing archive is represented as *no observed data*, never as an inferred or filled-in value. Users can import a raw `.phase` or generated `.json` file.
+ObsPy TauP uses the standard iasp91 spherical 1D Earth model, with first available P/S-family arrivals for a source at USGS catalog depth and receiver epicentral distance. The iasp91 model is not a locally fitted Ridgecrest crustal model. Some regional phase combinations may have no theoretical result; they are displayed as unavailable rather than substituted with constant-speed arrivals.
 
-Observed phase picks may correspond to different station channels or phases with varying onset quality. Selecting the earliest pick is a documented simple rule; further work should incorporate quality flags, channel selection, station metadata and uncertainty. A mismatch between SCEDC and USGS origins is explicitly corrected, but differences in hypocenter, event magnitude or station elevation still affect residuals. Results cannot be interpreted as purely velocity-model error.
+## Ridgecrest 3D tomography model
 
-## Map imagery
+The 3D input is the published velocity grid of White, Fang, Catchings, Goldman, Steidl, and Ben-Zion (2021), dataset DOI [10.17632/gv33tgvt5f.2](https://doi.org/10.17632/gv33tgvt5f.2). The CSV has latitude, longitude, depth (relative to sea level) and Vp/Vs columns. The model builder selects relevant cells and builds a spatial KD-tree in a locally approximated Cartesian coordinate system.
 
-Three map modes are supported: Esri World Imagery (satellite/aerial), OpenStreetMap tiles, and an offline WGS84 coordinate grid. Tile imagery is external content and subject to its publisher's access conditions. Source credits are shown in the map and no imagery is included in the project repository.
+For each source-to-receiver segment, it samples 121 positions and estimates Vp/Vs from eight nearby velocity nodes using inverse-distance-squared weights. The travel time is the line integral of slowness over the fixed straight segment, approximated by trapezoidal numerical integration. If velocity coverage exceeds a 5 km nearest-neighbor gap at any sample, the result is null. This is a true spatially variable 3D velocity input, **but it is not 3D ray tracing or fast marching**; the ray path is not bent to minimize travel time. Station elevation and depth datum differences are neglected. Values should not be treated as high-accuracy observed travel times.
 
-## Verification and limits
+The tomography was itself derived from earthquakes in the 2019 sequence. Comparing it with the 2019 Mw 6.4 and 7.1 picks is useful as a software and model comparison, but **does not constitute a fully independent out-of-sample test of the tomography**.
 
-Node unit tests cover distance geometry, wavefront formation, trigger ordering, no-alarm cases, latency monotonicity, STP parsing, origin alignment and signed residual statistics. Python unit tests independently check text pick parsing.
+## Validation
 
-Positive simulated lead time does not establish that an actual alert was delivered, that damaging shaking occurred, or that actionable warning time was available. S-wave onset is not synonymous with threshold ground motion. This is a historical teaching/research baseline rather than an operational EEW service.
+For each station and phase with both a valid observed pick and a valid modeled arrival, residual = predicted − observed, MAE = mean absolute residual, Bias = mean signed residual, RMSE = root mean square residual. Positive residuals indicate late predictions, and negative residuals indicate early predictions. Model-specific missing predictions can change sample sizes. Scientific comparisons require matching station subsets and checking phase-pick quality.
+
+## Simulated warning system
+
+An enabled station is available after calculated P arrival + detection delay + station telemetry delay. The hypothetical issue time is the kth available station plus a processing delay, and user message time adds a delivery delay. Lead time is modeled first S arrival at a city minus modeled user message time. This calculation is **not** a real ShakeAlert reconstruction and is not a estimate of damaging shaking arrival.
 
 ## Sources
 
-- USGS Ridgecrest event: https://earthquake.usgs.gov/earthquakes/eventpage/ci38457511
-- NCEDC Ridgecrest research station set: https://ncedc.org/ftp/outgoing/taira/RC/RC_seismicity_map.html
-- NCEDC station coordinates: https://ncedc.org/ftp/outgoing/taira/RC/ci_bb_sta.txt
-- SCEDC public phase archive: https://scedc-pds.s3.us-west-2.amazonaws.com/event_phases/2019/2019_187/38457511.phase
-- SCEDC STP manual: https://scedc.caltech.edu/research-tools/stp/STP_Manual_v1.01.pdf
-- SCEDC dataset citation: https://doi.org/10.7909/C3WD3xH1
-- Esri attribution: https://support.esri.com/en-us/knowledge-base/what-is-the-correct-way-to-cite-an-arcgis-online-basema-000012040
-- OpenStreetMap attribution: https://www.openstreetmap.org/copyright
+- [USGS Ridgecrest sequence](https://www.usgs.gov/news/2019-ridgecrest-california-earthquake-sequence-geonarrative)
+- [NCEDC station locations](https://ncedc.org/ftp/outgoing/taira/RC/ci_bb_sta.txt)
+- [SCEDC event phase archive](https://scedc.caltech.edu/data/cloud.html)
+- [ObsPy TauP](https://docs.obspy.org/packages/obspy.taup.html)
+- [White et al., GJI 2021](https://doi.org/10.1093/gji/ggab224)
+- [White et al., tomography dataset](https://data.mendeley.com/datasets/gv33tgvt5f/2)
+- [W3C WCAG 2.2 focus visible](https://www.w3.org/WAI/WCAG22/Understanding/focus-visible)
+- [Esri World Imagery attribution](https://support.esri.com/en-us/knowledge-base/what-is-the-correct-way-to-cite-an-arcgis-online-basema-000012040)

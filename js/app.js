@@ -4,7 +4,7 @@ import {parseSTP,normalizeObservations,evaluateArrivals} from './observations.js
 
 const $=id=>document.getElementById(id);
 const settings={vp:['vpKmS',true],vs:['vsKmS',true],'trigger-count':['triggersRequired',false],'detect-delay':['detectionDelayS',false],'network-delay':['networkDelayS',false],'process-delay':['processingDelayS',false],'delivery-delay':['deliveryDelayS',false]};
-let data,model,defaults,results,map,observed=null,validation=null;
+let data,model,defaults,results,map,observed=null,validation=null,modelType='constant',modelData={},cases=[],observationsCache={},selectionEpoch=0;
 let elapsed=0,playing=false,speed=1,lastFrame=0,selected={kind:'city',id:'ridgecrest'},activeTab='simulation',toastHandle;
 const disabled=new Set();
 const format=n=>n==null||!Number.isFinite(n)?'—':n.toFixed(2)+' s';
@@ -16,27 +16,81 @@ function notify(message,error=false){
 }
 async function init(){
   try{
-    const r=await fetch('./data/ridgecrest-2019.json',{cache:'no-store'});
-    if(!r.ok)throw Error(`Event data HTTP ${r.status}`);
-    data=await r.json();model={...data.model};defaults={...model};
+    const response=await fetch('./data/events.json',{cache:'no-store'});
+    if(!response.ok)throw Error('Event dataset unavailable');
+    const collection=await response.json();
+    cases=collection.events;
+    data={...collection,event:cases[0]};model={...data.model};defaults={...model};
     map=new EEWMap($('map'),select);map.data=data;map.selection=selected;
     $('duration-readout').textContent=model.durationS+' s';$('scrubber').max=model.durationS;
     bind();refresh();setElapsed(0);
     $('load-state').textContent=`${data.stations.length} stations`;
     lastFrame=performance.now();requestAnimationFrame(frame);
-    try{
-      const response=await fetch('./data/observations.json',{cache:'no-store'});
-      if(response.ok){const raw=await response.json();useObservations(raw,'SCEDC phase archive');}
-      else setValidationEmpty();
-    }catch(e){setValidationEmpty();}
+    await Promise.all([loadPredictions('1d'),loadPredictions('3d')]);
+    await loadObservations();
   }catch(e){$('load-state').textContent='Data error';notify(e.message,true);console.error(e);}
+}
+async function loadPredictions(key){
+  try{
+    const response=await fetch(`./data/models-${key}.json`,{cache:'no-store'});
+    if(!response.ok)return;
+    const record=await response.json();
+    if(!record.events || !record.events[cases[0].id])return;
+    modelData[key]=record;
+    const option=$('model-select').querySelector(`[value="${key}"]`);
+    option.disabled=false;option.textContent=key==='1d'?'iasp91 · TauP 1D':'Ridgecrest 3D tomography';
+  }catch(e){console.error(e);}
+}
+async function loadObservations(){
+  const epoch=++selectionEpoch;
+  observed=null;validation=null;setValidationEmpty();refresh();
+  const id=data.event.id;
+  try{
+    if(!observationsCache[id]){
+      const response=await fetch(`./data/observations/${id}.json`,{cache:'no-store'});
+      if(!response.ok)throw Error('Observed phases unavailable');
+      observationsCache[id]=await response.json();
+    }
+    if(epoch!==selectionEpoch)return;
+    useObservations(observationsCache[id],'SCEDC');
+  }catch(e){
+    if(epoch!==selectionEpoch)return;
+    setValidationEmpty();updateComparison();
+  }
+}
+function selectEvent(id){
+  const next=cases.find(x=>x.id===id);
+  if(!next || next.id===data.event.id)return;
+  data={...data,event:next};map.data=data;selected={kind:'city',id:'ridgecrest'};map.selection=selected;
+  $('event-tag').textContent='Mw '+next.magnitude.toFixed(1);
+  $('origin-readout').textContent=next.originUTC.replace('T',' ').replace('Z','');
+  $('depth-readout').textContent=next.depthKm.toFixed(1)+' km';
+  map.focus(next.latitude,next.longitude,8);setPlay(false);setElapsed(0);
+  loadObservations();
+}
+function activePredictions(){
+  if(modelType==='constant')return null;
+  return modelData[modelType]?.events?.[data.event.id]??null;
+}
+function setModel(key){
+  if(key!=='constant' && !modelData[key]?.events?.[data.event.id]){
+    $('model-select').value=modelType;notify('Travel times unavailable for this event',true);return;
+  }
+  modelType=key;
+  $('vp').disabled=key!=='constant';$('vs').disabled=key!=='constant';
+  const messages={constant:'Fixed-velocity straight rays', '1d':'iasp91 · spherical 1D TauP first arrivals', '3d':'Ridgecrest tomography · straight-path 3D slowness integral'};
+  $('model-status').textContent=messages[key];
+  map.showBaselineWavefront=key==='constant';
+  refresh();
 }
 function setValidationEmpty(){
   $('validation-status').textContent='No observations loaded';$('validation-status').classList.add('empty');$('pick-count').textContent='0 picks';
   for(const id of ['p-mae','s-mae','p-bias','s-bias'])$(id).textContent='—';
   $('pick-rows').replaceChildren();const tr=document.createElement('tr');const td=document.createElement('td');td.colSpan=3;td.textContent='No phase picks';tr.append(td);$('pick-rows').append(tr);
   $('residual-summary').textContent='No observed arrivals';
+  $('comparison-rows').replaceChildren();
 }
+
 function useObservations(raw,source){
   observed=normalizeObservations(raw,data.event.id,data.stations.map(x=>x.id));
   map.observed=observed;validation=evaluateArrivals(results.stations,observed);
@@ -44,17 +98,17 @@ function useObservations(raw,source){
   $('pick-count').textContent=count+' picks';$('validation-status').classList.remove('empty');$('validation-status').textContent=`${observed.size} stations · ${source}`;
   for(const [id,stat] of [['p-mae',validation.p.mae],['s-mae',validation.s.mae],['p-bias',validation.p.bias],['s-bias',validation.s.bias]])$(id).textContent=format(stat);
   updatePickRows();renderResidual();updateInspector();map.render();
-  notify(`${count} observed picks loaded`);
+  updateComparison();updateStationList();notify(`${count} observed picks loaded`);
 }
 function refresh(){
-  results=calculateNetwork(data,model,disabled);
+  results=calculateNetwork(data,model,disabled,activePredictions());
   map.results=results;
   validation=observed?evaluateArrivals(results.stations,observed):null;
   if(validation){
     for(const [id,stat] of [['p-mae',validation.p.mae],['s-mae',validation.s.mae],['p-bias',validation.p.bias],['s-bias',validation.s.bias]])$(id).textContent=format(stat);
     updatePickRows();renderResidual();
   }
-  map.render();updateReadouts();updateStationList();updateCityList();updateInspector();
+  map.render();updateReadouts();updateStationList();updateCityList();updateInspector();updateComparison();
 }
 function updateReadouts(){
   for(const [id,[key,velocity]] of Object.entries(settings)){
@@ -76,7 +130,7 @@ function updateStationList(){
     const toggle=document.createElement('input');toggle.type='checkbox';toggle.checked=station.enabled;toggle.setAttribute('aria-label','Enable '+station.id);
     toggle.addEventListener('change',()=>{if(toggle.checked)disabled.delete(station.id);else disabled.add(station.id);refresh();notify(station.code+' '+(toggle.checked?'enabled':'disabled'));});
     const label=document.createElement('div');label.className='station-text';
-    const name=document.createElement('b');name.textContent=station.id;const subtitle=document.createElement('small');subtitle.textContent=`P ${simple(station.p)}s · ${simple(station.distanceKm)}km${observed?.has(station.id)?' · observed':''}`;
+    const name=document.createElement('b');name.textContent=station.id;const subtitle=document.createElement('small');subtitle.textContent=`P ${station.p===null?'—':simple(station.p)+'s'} · ${simple(station.distanceKm)}km${observed?.has(station.id)?' · observed':''}`;
     label.append(name,subtitle);
     const focus=document.createElement('button');focus.className='station-focus';focus.textContent='⌖';focus.title='Locate '+station.id;focus.setAttribute('aria-label','Select '+station.id);
     focus.addEventListener('click',()=>{select('station',station.id);map.focus(station.latitude,station.longitude,9.5);});
@@ -101,7 +155,7 @@ function updateInspector(){
     $('lead-label').textContent='P arrival';val.innerHTML=`${simple(station.p)} <small>s</small>`;
     $('lead-state').textContent=station.enabled?'Enabled':'Disabled';
   }else if(selected.kind==='event'){
-    $('selected-kind').textContent='EVENT';$('selected-name').textContent='Ridgecrest';$('selected-distance').textContent='USGS ci38457511';
+    $('selected-kind').textContent='EVENT';$('selected-name').textContent='Ridgecrest';$('selected-distance').textContent='USGS '+data.event.id;
     $('lead-label').textContent='Alert issue';val.innerHTML=`${simple(results.issue)} <small>s</small>`;$('lead-state').textContent='Modeled';
   }else if(city){
     $('selected-kind').textContent='CITY';$('selected-name').textContent=city.name;$('selected-distance').textContent=`${simple(city.distanceKm)} km from epicenter`;
@@ -121,7 +175,7 @@ function updateInspector(){
       addRow('Observed S',format(o.s));addRow('S residual',format(o.s===undefined?null:station.s-o.s));
     }
   }else if(city){addRow('City P arrival',format(city.p));addRow('City S arrival',format(city.s));}
-  $('result-basis').textContent=observed?'Observed picks: SCEDC · Wave model: constant velocity':'Constant velocity / illustrative system delays';
+  $('result-basis').textContent=`Model: ${modelType} · ${observed?'SCEDC picks':'No measured picks'} · hypothetical alert delays`;
 }
 function updatePickRows(){
   const tbody=$('pick-rows');tbody.replaceChildren();
@@ -151,7 +205,23 @@ function renderResidual(){
   for(const row of rows){const i=stationIds.indexOf(row.id);const x=pad.left+(i+.5)*xRange/stationIds.length+(row.phase==='p'?-3:3);const y=mid-row.residual/limit*(chartH/2);c.beginPath();c.arc(x,y,3.2,0,Math.PI*2);c.fillStyle=row.phase==='p'?'#0081ac':'#d88c16';c.fill();}
   c.textAlign='center';c.fillStyle='#56747b';c.fillText('Station index (P blue, S amber)',pad.left+xRange/2,height-5);
   c.textAlign='start';
-  $('residual-summary').textContent=`P n=${validation.p.n} · S n=${validation.s.n} · residuals in seconds`;
+  $('residual-summary').textContent=`P n=${validation.p.n} · S n=${validation.s.n} · predicted − observed (s)`;
+}
+function updateComparison(){
+  const root=$('comparison-rows');root.replaceChildren();
+  if(!observed){const row=document.createElement('tr');const cell=document.createElement('td');cell.colSpan=3;cell.textContent='No observed phase picks';row.append(cell);root.append(row);return;}
+  for(const [key,label] of [['constant','Constant'],['1d','TauP iasp91'],['3d','3D tomography']]){
+    const predictions=key==='constant'?null:modelData[key]?.events?.[data.event.id];
+    const row=document.createElement('tr');if(key===modelType)row.classList.add('comparison-selected');
+    let values=[label,'—','—'];
+    if(key==='constant'||predictions){
+      const calculated=calculateNetwork(data,model,disabled,predictions);
+      const summary=evaluateArrivals(calculated.stations,observed);
+      values=[label,format(summary.p.mae),format(summary.s.mae)];
+    }
+    for(const value of values){const cell=document.createElement('td');cell.textContent=value;row.append(cell);}
+    root.append(row);
+  }
 }
 function select(kind,id){selected={kind,id};map.selection=selected;updateStationList();updateCityList();updateInspector();map.render();}
 function setElapsed(t){
@@ -162,6 +232,8 @@ function setElapsed(t){
 function setPlay(value){playing=value;$('play').textContent=value?'Ⅱ':'▶';$('play').setAttribute('aria-label',value?'Pause':'Play');}
 function frame(t){const delta=Math.min(.18,(t-lastFrame)/1000);lastFrame=t;if(playing){const target=Math.min(model.durationS,elapsed+delta*speed);setElapsed(target);if(target>=model.durationS)setPlay(false);}requestAnimationFrame(frame);}
 function bind(){
+  $('event-select').addEventListener('change',e=>selectEvent(e.target.value));
+  $('model-select').addEventListener('change',e=>setModel(e.target.value));
   for(const b of document.querySelectorAll('.tab')){b.addEventListener('click',()=>changeTab(b.dataset.panel));b.addEventListener('keydown',e=>{if(e.key!=='ArrowRight'&&e.key!=='ArrowLeft')return;const buttons=[...document.querySelectorAll('.tab')];const index=buttons.indexOf(b);const next=buttons[(index+(e.key==='ArrowRight'?1:-1)+buttons.length)%buttons.length];changeTab(next.dataset.panel);next.focus();e.preventDefault();});}
   for(const b of document.querySelectorAll('.map-mode'))b.addEventListener('click',()=>{
     const base=b.dataset.base;map.baseStyle=base;map.render();
@@ -181,6 +253,7 @@ function bind(){
   $('restart').addEventListener('click',()=>{setPlay(false);setElapsed(0);});
   $('scrubber').addEventListener('input',e=>setElapsed(Number(e.target.value)));
   $('speed').addEventListener('change',e=>{speed=Number(e.target.value);});
+  $('phase-file-trigger').addEventListener('click',()=>$('phase-file').click());
   $('phase-file').addEventListener('change',async e=>{
     const f=e.target.files?.[0];if(!f)return;
     try{const text=await f.text();const raw=f.name.toLowerCase().endsWith('.json')?JSON.parse(text):parseSTP(text,data.event.id,data.stations.map(s=>s.id),data.event.originUTC);
@@ -191,11 +264,11 @@ function bind(){
   document.addEventListener('keydown',e=>{if(e.code==='Space'&&!['INPUT','SELECT','TEXTAREA','BUTTON'].includes(document.activeElement?.tagName)){e.preventDefault();if(elapsed>=model.durationS)setElapsed(0);setPlay(!playing);}});
 }
 function exportCSV(){
-  const rows=[['EEW Lab V0.2'],['Event',data.event.id],['Velocity P',model.vpKmS],['Velocity S',model.vsKmS],['Stations required',model.triggersRequired],['Issue',results.issue??''],['Delivery',results.delivered??''],['City','P predicted','S predicted','Delivery','Lead']];
+  const rows=[['EEW Lab V0.3'],['Event',data.event.id],['Model',modelType],['Velocity P',model.vpKmS],['Velocity S',model.vsKmS],['Stations required',model.triggersRequired],['Issue',results.issue??''],['Delivery',results.delivered??''],['City','P predicted','S predicted','Delivery','Lead']];
   for(const city of results.cities)rows.push([city.name,city.p,city.s,results.delivered??'',city.lead??'']);
   rows.push([],['Station','Phase','Predicted','Observed','Residual']);
   for(const r of validation?.comparisons||[])rows.push([r.id,r.phase,r.predicted,r.observed,r.residual]);
   const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');
-  const url=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='eew-lab-v0.2-results.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),3000);notify('CSV exported');
+  const url=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=`eew-lab-${data.event.id}-${modelType}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),3000);notify('CSV exported');
 }
 init();

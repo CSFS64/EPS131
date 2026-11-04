@@ -1,0 +1,33 @@
+name: Observed events and 1D travel times
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'pipeline/fetch_events_phases.py'
+      - 'pipeline/prepare_events.py'
+      - 'pipeline/build_1d.py'
+      - 'data/events.json'
+      - '.github/workflows/observed-models.yml'
+permissions:
+  contents: write
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check obspy==1.4.2
+      - run: python pipeline/fetch_events_phases.py
+      - run: python pipeline/build_1d.py
+      - run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/observations/ data/models-1d.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Add observed Ridgecrest phase picks and iasp91 TauP predictions'
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi

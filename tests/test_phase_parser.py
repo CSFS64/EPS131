@@ -29,9 +29,9 @@ class PhaseParserTest(unittest.TestCase):
         self.assertAlmostEqual(result["originOffsetSeconds"], 0.5)
 
     def test_real_scedc_header(self):
-        raw = "\\n".join([
+        raw = "\n".join([
             "  38457511 eq  l 2019/07/06,03:19:53.040   35.7695   -117.5993   8.00  7.10  w 0.5",
-            "\\tCI    CLC HHZ --   35.8157  -117.5975   775.0 P d. i  0.8    5.14   0.628"
+            "\tCI    CLC HHZ --   35.8157  -117.5975   775.0 P d. i  0.8    5.14   0.628"
         ])
         result = build_output(raw, self.event)
         self.assertEqual(len(result["observations"]), 1)

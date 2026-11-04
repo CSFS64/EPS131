@@ -31,3 +31,9 @@ test('empty observations produces null metrics',()=>{
  const r=evaluateArrivals(calculateNetwork(data,data.model).stations,new Map());
  assert.equal(r.p.mae,null);assert.equal(r.s.n,0);
 });
+
+test('missing model arrival does not create a fictitious residual',()=>{
+ const obs=new Map([['CI.CLC',{p:0.7,s:2.4}]]);
+ const rows=evaluateArrivals([{id:'CI.CLC',p:null,s:null,distanceKm:3}],obs);
+ assert.equal(rows.p.n,0);assert.equal(rows.s.n,0);
+});
