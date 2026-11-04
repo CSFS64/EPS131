@@ -1,0 +1,202 @@
+import { destination, surfaceWavefrontRadiusKm, clamp } from './physics.js';
+
+const TILE = 256;
+const TILE_SERVER = 'https://tile.openstreetmap.org';
+const toWorld = (lat, lon, zoom) => {
+  const scale = TILE * 2 ** zoom;
+  const sinLat = Math.sin(clamp(lat, -85.051128, 85.051128) * Math.PI / 180);
+  return {x: (lon + 180) / 360 * scale, y: (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * scale};
+};
+const fromWorld = (x, y, zoom) => {
+  const scale = TILE * 2 ** zoom;
+  const n = Math.PI * (1 - 2 * y / scale);
+  return {longitude: x / scale * 360 - 180, latitude: Math.atan(Math.sinh(n)) * 180 / Math.PI};
+};
+export class EEWMap {
+  constructor(canvas, onSelect) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.onSelect = onSelect;
+    this.lat = 35.43;
+    this.lon = -117.77;
+    this.zoom = 8;
+    this.dpr = 1;
+    this.tiles = new Map();
+    this.data = null;
+    this.results = null;
+    this.elapsed = 0;
+    this.selection = null;
+    this.showP = true;
+    this.showS = true;
+    this.showStations = true;
+    this.showLabels = true;
+    this.showTiles = true;
+    this.pointer = null;
+    this.hover = null;
+    this.hitTargets = [];
+    this.resizeObserver = new ResizeObserver(() => this.resize());
+    this.resizeObserver.observe(canvas);
+    this.bindInput();
+    this.resize();
+  }
+  resize() {
+    const box = this.canvas.getBoundingClientRect();
+    this.width = Math.max(1, box.width); this.height = Math.max(1, box.height);
+    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.canvas.width = Math.round(this.width * this.dpr);
+    this.canvas.height = Math.round(this.height * this.dpr);
+    this.render();
+  }
+  worldCenter() { return toWorld(this.lat, this.lon, this.zoom); }
+  screenPosition(lat, lon) {
+    const center = this.worldCenter(), coord = toWorld(lat, lon, this.zoom);
+    return {x: this.width / 2 + coord.x - center.x, y: this.height / 2 + coord.y - center.y};
+  }
+  screenToGeo(x, y) {
+    const center = this.worldCenter();
+    return fromWorld(center.x + x - this.width / 2, center.y + y - this.height / 2, this.zoom);
+  }
+  changeZoom(delta, x = this.width / 2, y = this.height / 2) {
+    const before = this.screenToGeo(x, y);
+    this.zoom = clamp(this.zoom + delta, 5, 13);
+    const afterW = toWorld(before.latitude, before.longitude, this.zoom);
+    const centerNew = {x: afterW.x - (x - this.width/2), y: afterW.y - (y - this.height/2)};
+    const geo = fromWorld(centerNew.x, centerNew.y, this.zoom);
+    this.lat = geo.latitude; this.lon = geo.longitude;
+    this.render();
+  }
+  focus(lat, lon, zoom = this.zoom) { this.lat = lat; this.lon = lon; this.zoom = zoom; this.render(); }
+  bindInput() {
+    this.canvas.addEventListener('wheel', e => {
+      e.preventDefault();
+      const rect = this.canvas.getBoundingClientRect();
+      this.changeZoom(e.deltaY < 0 ? .4 : -.4, e.clientX - rect.left, e.clientY - rect.top);
+    }, {passive:false});
+    this.canvas.addEventListener('pointerdown', e => {
+      this.pointer = {x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY, moved:false, center:this.worldCenter()};
+      this.canvas.setPointerCapture(e.pointerId);
+      this.canvas.classList.add('dragging');
+    });
+    this.canvas.addEventListener('pointermove', e => {
+      if (this.pointer) {
+        const dx = e.clientX - this.pointer.x, dy = e.clientY - this.pointer.y;
+        if (Math.abs(e.clientX - this.pointer.startX) + Math.abs(e.clientY - this.pointer.startY) > 4) this.pointer.moved = true;
+        const geo = fromWorld(this.pointer.center.x - dx, this.pointer.center.y - dy, this.zoom);
+        this.lat = geo.latitude; this.lon = geo.longitude;
+        this.render();
+      } else {
+        const rect = this.canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left, y = e.clientY - rect.top;
+        this.hover = this.hitTargets.find(t => Math.hypot(t.x - x, t.y - y) < t.r + 5) ?? null;
+        this.canvas.style.cursor = this.hover ? 'pointer' : 'grab';
+      }
+    });
+    this.canvas.addEventListener('pointerup', e => {
+      if (this.pointer && !this.pointer.moved) {
+        const rect = this.canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left, y = e.clientY - rect.top;
+        const hit = [...this.hitTargets].reverse().find(t => Math.hypot(t.x-x,t.y-y) < t.r+7);
+        if (hit) this.onSelect(hit.kind, hit.id);
+      }
+      this.pointer = null; this.canvas.classList.remove('dragging');
+    });
+    this.canvas.addEventListener('pointercancel', () => {this.pointer=null;this.canvas.classList.remove('dragging');});
+  }
+  render() {
+    if (!this.width || !this.height) return;
+    const c = this.ctx; c.setTransform(this.dpr,0,0,this.dpr,0,0);
+    c.clearRect(0,0,this.width,this.height);
+    c.fillStyle='#eaf2f3'; c.fillRect(0,0,this.width,this.height);
+    this.drawGrid(c);
+    if (this.showTiles) this.drawTiles(c);
+    if (!this.data) return;
+    const ev = this.data.event;
+    if (this.showP) this.drawWavefront(c, ev, this.elapsed, this.data.model.vpKmS, '#047fa4', 1.8, [7,5]);
+    if (this.showS) this.drawWavefront(c, ev, this.elapsed, this.data.model.vsKmS, '#e39a33', 2.6, []);
+    this.hitTargets=[];
+    for (const city of this.results?.cities ?? []) this.drawCity(c,city);
+    if (this.showStations) for (const station of this.results?.stations ?? []) this.drawStation(c,station);
+    this.drawEpicenter(c,ev);
+  }
+  drawGrid(c) {
+    c.strokeStyle = '#c1d3d7';c.lineWidth = .75;
+    const tl = this.screenToGeo(0,0), br = this.screenToGeo(this.width,this.height);
+    const stride=this.zoom>=9?.25:this.zoom>=7?.5:1;
+    c.font='11px Inter, system-ui, sans-serif';
+    for(let lon=Math.ceil(tl.longitude/stride)*stride;lon<=br.longitude;lon+=stride) {
+      let a=this.screenPosition(this.lat,lon);
+      c.beginPath();c.moveTo(a.x,0);c.lineTo(a.x,this.height);c.stroke();
+      c.fillStyle='#72949a';c.fillText(`${Math.abs(lon).toFixed(1)}°W`,a.x+6,20);
+    }
+    for(let lat=Math.ceil(br.latitude/stride)*stride;lat<=tl.latitude;lat+=stride) {
+      let a=this.screenPosition(lat,this.lon);
+      c.beginPath();c.moveTo(0,a.y);c.lineTo(this.width,a.y);c.stroke();
+      c.fillStyle='#72949a';c.fillText(`${lat.toFixed(1)}°N`,9,a.y-5);
+    }
+  }
+  drawTiles(c) {
+    const z = Math.floor(this.zoom), ratio=2**(this.zoom-z), count=2**z, tileSize=TILE*ratio;
+    const center=toWorld(this.lat,this.lon,z), ox=this.width/2-center.x*ratio,oy=this.height/2-center.y*ratio;
+    const minX=Math.floor((0-ox)/tileSize), maxX=Math.floor((this.width-ox)/tileSize);
+    const minY=Math.floor((0-oy)/tileSize), maxY=Math.floor((this.height-oy)/tileSize);
+    let requested=0;
+    for(let x=minX;x<=maxX;x++) for(let y=minY;y<=maxY;y++){
+      if(y<0||y>=count)continue;
+      const normalizedX=((x%count)+count)%count, key=`${z}/${normalizedX}/${y}`;
+      let img=this.tiles.get(key);
+      if (!img && requested++<35) {
+        img=new Image(); img.crossOrigin='anonymous';
+        img.onload=()=>this.render(); img.onerror=()=>{img.failed=true;this.render();};
+        img.src=`${TILE_SERVER}/${key}.png`;
+        this.tiles.set(key,img);
+      }
+      if(img?.complete && img.naturalWidth>0) {
+        c.save();c.globalAlpha=.86;
+        c.drawImage(img,ox+x*tileSize,oy+y*tileSize,tileSize+1,tileSize+1);
+        c.restore();
+      }
+    }
+    if(this.tiles.size>250){for(const k of [...this.tiles.keys()].slice(0,70))this.tiles.delete(k);}
+  }
+  drawWavefront(c,event,t,velocity,color,width,dash) {
+    const r = surfaceWavefrontRadiusKm(t,event.depthKm,velocity);
+    if(r===null || r===0)return;
+    c.save(); c.strokeStyle=color;c.lineWidth=width;c.setLineDash(dash);
+    c.shadowColor=color;c.shadowBlur=2;
+    c.beginPath();
+    for(let b=0;b<=360;b+=3){const ll=destination(event.latitude,event.longitude,b,r);const p=this.screenPosition(ll.latitude,ll.longitude);if(b===0)c.moveTo(p.x,p.y);else c.lineTo(p.x,p.y);}
+    c.closePath();c.stroke(); c.restore();
+  }
+  drawEpicenter(c,event){
+    const p=this.screenPosition(event.latitude,event.longitude);if(p.x<-30||p.x>this.width+30||p.y<-30||p.y>this.height+30)return;
+    c.save();c.translate(p.x,p.y);
+    c.strokeStyle='#c6484d';c.lineWidth=1.2;c.globalAlpha=.44;
+    c.beginPath();c.arc(0,0,19,0,Math.PI*2);c.stroke();c.globalAlpha=1;
+    c.fillStyle='#c6484d';c.strokeStyle='#ffffff';c.lineWidth=1.8;
+    c.beginPath();c.moveTo(0,-9);c.lineTo(8,6);c.lineTo(-8,6);c.closePath();c.fill();c.stroke();
+    c.fillStyle='#7d2932';c.font='700 11px Inter,system-ui';c.fillText('M7.1 EPICENTER',14,-10);
+    c.restore();this.hitTargets.push({kind:'event',id:event.id,x:p.x,y:p.y,r:15});
+  }
+  drawCity(c,city){
+    const p=this.screenPosition(city.latitude,city.longitude);
+    if(p.x<-70||p.x>this.width+70||p.y<-30||p.y>this.height+30)return;
+    const active=this.selection?.kind==='city'&&this.selection.id===city.id;
+    c.save();c.beginPath();c.arc(p.x,p.y,active?5.3:3.5,0,Math.PI*2);
+    c.fillStyle=active?'#006d7e':'#2b5260';c.fill();
+    c.font=`${active?'700':'500'} 11px Inter,system-ui`;
+    c.shadowColor='#ffffff';c.shadowBlur=5;c.fillStyle='#2d4a56';c.fillText(city.name,p.x+8,p.y-7);
+    c.restore();this.hitTargets.push({kind:'city',id:city.id,x:p.x,y:p.y,r:9});
+  }
+  drawStation(c,station){
+    const p=this.screenPosition(station.latitude,station.longitude);
+    if(p.x<-20||p.x>this.width+20||p.y<-20||p.y>this.height+20)return;
+    const selected=this.selection?.kind==='station'&&this.selection.id===station.id;
+    const arrival = this.elapsed>=station.available ? '#12886c' : this.elapsed>=station.p?'#dd963a':'#078aa2';
+    const color=station.enabled?arrival:'#a0a8ad';
+    c.save();c.fillStyle=color;c.strokeStyle='#ffffff';c.lineWidth=1.5;
+    if(selected){c.beginPath();c.arc(p.x,p.y,10,0,Math.PI*2);c.strokeStyle='#063f5c';c.stroke();}
+    c.beginPath();c.rect(p.x-4,p.y-4,8,8);c.fill();c.stroke();
+    if((this.showLabels && this.zoom >= 9) || selected){c.font='600 10px Inter,system-ui';c.shadowColor='#ffffff';c.shadowBlur=6;c.fillStyle='#1a4e65';c.fillText(station.code,p.x+8,p.y+4);}
+    c.restore();this.hitTargets.push({kind:'station',id:station.id,x:p.x,y:p.y,r:8});
+  }
+}
