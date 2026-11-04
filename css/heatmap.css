@@ -1,0 +1,39 @@
+
+.impact-title{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:11px}
+.impact-map-switch{min-height:26px;padding:3px 9px;border:1px solid #8ca8b3;background:#f6f8f8;color:#214959;border-radius:14px;font-size:11px}
+.impact-map-switch:hover{background:#dcecf0;border-color:#397c8d}
+.impact-map-switch[aria-pressed="true"]{background:#007c91;color:#fff;border-color:#005a71;box-shadow:inset 0 0 0 1px #fff}
+.impact-caption{font-size:11px;color:#596b73;margin:4px 0 6px}
+.impact-matrix{border:1px solid #a3b7bf;overflow-x:auto;max-width:100%;scrollbar-color:#9cb2bb #eef3f5}
+.impact-matrix:focus-visible{outline:2px solid #00556d;outline-offset:2px}
+.importance-table{border-collapse:separate;border-spacing:0;width:100%;font-size:11px;font-variant-numeric:tabular-nums}
+.importance-table th,.importance-table td{padding:1px;text-align:center;min-width:35px;height:31px;border:0;border-bottom:1px solid #dbe4e7}
+.importance-table thead th{position:sticky;top:0;z-index:2;background:#e8f0f2;color:#325363;font-weight:700;border-bottom:1px solid #99afb9}
+.importance-table .impact-station-head{min-width:72px;width:72px;text-align:left;position:sticky;left:0;z-index:3;padding:1px 3px 1px 5px;background:#f6f8f9;border-right:1px solid #c5d4d9}
+.importance-table thead .impact-station-head{z-index:4;background:#e8f0f2}
+.importance-table .current-k{background-color:#e0edf0;border-left:1px solid #7b9ca8;border-right:1px solid #7b9ca8}
+.impact-station-name{border:1px solid transparent;background:transparent;color:#1c4b5f;cursor:pointer;font-weight:700;font-size:11px;padding:5px 4px;min-height:27px;width:100%;text-align:left}
+.impact-station-name:hover{background:#d5e9ed;border-color:#508294}
+.impact-station-name:disabled{color:#8c9da4}
+.impact-cell{display:block;width:100%;min-width:32px;height:27px;padding:0 2px;border:1px solid #9fb4bc;border-radius:1px;color:#22414e;cursor:pointer;font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:600}
+.impact-cell.impact-dark{color:#fff}
+.impact-cell[data-status="delay"]{border-color:#6f9eab}
+.impact-cell:hover:not(:disabled){outline:2px solid #004e64;outline-offset:-2px;filter:brightness(.91)}
+.impact-cell:active:not(:disabled){outline:2px solid #002e42;outline-offset:-2px;filter:brightness(.85)}
+.impact-cell:focus-visible{outline:3px solid #003f56;outline-offset:1px;z-index:5;position:relative}
+.impact-cell:disabled{border-color:#d4dfe3;color:#a0abb0;cursor:default}
+.impact-legend{display:flex;flex-wrap:wrap;align-items:center;gap:6px 9px;padding:7px 1px 3px;color:#51666f;font-size:10px}
+.impact-legend span{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.impact-swatch{display:inline-block;width:11px;height:11px;border:1px solid #8b9fa8;vertical-align:middle;flex:none}
+.impact-swatch.zero{background:#fff}
+.impact-swatch.low{background:#d8eaee}
+.impact-swatch.medium{background:#a8d1d9}
+.impact-swatch.high{background:#62acbb}
+.impact-swatch.highest{background:#006d82}
+.impact-swatch.lost{background:#9b4542}
+.map-importance-key{position:absolute;left:8px;bottom:56px;display:flex;align-items:center;gap:4px;border:1px solid #a5b8c0;background:#fff;padding:5px 7px;font-size:10px;color:#294c5a}
+.map-importance-key span{margin-right:3px}
+@media(max-width:430px){.importance-table th,.importance-table td{min-width:35px}.impact-legend{gap:4px 7px}}
+
+.impact-actions{display:flex;align-items:center;gap:5px}
+.impact-actions #export-impact-png{min-height:26px;padding:3px 8px;border-radius:14px;font-size:11px}

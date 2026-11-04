@@ -1,4 +1,4 @@
-# EEW Lab V0.4.5
+# EEW Lab V0.4.6
 
 [Open website](https://csfs64.github.io/EPS131/) · [Methods](docs/methodology.md)
 
@@ -97,3 +97,7 @@ V0.4.5 returns to a flat institutional web-app treatment, guided by ALEKS-like c
 ## Interaction states
 
 The interface follows the supplied ALEKS control references: primary and secondary buttons, grouped map toggles, persistent selections, direct disclosure headers and keyboard-visible focus rings. Pointer hover, press, keyboard focus and selection each have distinct borders or fills. No animations or code annotations are used.
+
+## Station importance heatmap
+
+Open Stations to see a leave-one-station-out sensitivity matrix. Each row is a station and each column is the number of stations required for a hypothetical alert (k=1–15; scroll horizontally to inspect all thresholds). Each cell represents the increase in message delivery time, in seconds, from disabling exactly that station while keeping the other currently enabled stations and all latency parameters unchanged. A zero means no change; `×` means the alert becomes impossible because too few stations remain. `—` denotes an already disabled station, missing model arrival, or an undefined baseline. The current trigger threshold column is outlined. Clicking a valid cell changes the trigger threshold and selects the corresponding station. The Map colors switch colors station markers by the importance for the current threshold and selected model, rather than by arrival state. Event, model, threshold, velocity, and station enable/disable changes recompute the matrix. Global Export CSV includes the full matrix; the PNG button exports a standalone full-resolution heatmap for reports. These are modeled time sensitivities, not observed operational ShakeAlert criticalities. Under this network model, the change in message delivery time is the same across destinations; individual city lead-time changes differ only when the corresponding modeled S-arrival is unavailable.

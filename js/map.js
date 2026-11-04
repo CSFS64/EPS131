@@ -33,6 +33,8 @@ export class EEWMap {
     this.baseStyle = 'satellite';
     this.observed = new Map();
     this.showBaselineWavefront = true;
+    this.importanceEnabled = false;
+    this.impactValues = new Map();
     this.pointer = null;
     this.hover = null;
     this.hitTargets = [];
@@ -195,8 +197,10 @@ export class EEWMap {
     if(p.x<-20||p.x>this.width+20||p.y<-20||p.y>this.height+20)return;
     const selected=this.selection?.kind==='station'&&this.selection.id===station.id;
     const arrival = station.available!==null && this.elapsed>=station.available ? '#3f947c' : station.p!==null && this.elapsed>=station.p?'#c59c58':'#359ab1';
-    const color=station.enabled?arrival:'#a0a8ad';
-    c.save();c.fillStyle=color;c.strokeStyle='#ffffff';c.lineWidth=1.5;
+    const cell=this.importanceEnabled?this.impactValues.get(station.id):null;
+    const severity=cell?.status==='lost'?'#9b4542':cell?.status==='unavailable'||cell?.status==='missing'?'#edf0f1':cell?.status==='disabled'?'#a0a8ad':!cell?.delta?'#ffffff':cell.delta<.5?'#d8eaee':cell.delta<1.5?'#a8d1d9':cell.delta<3?'#62acbb':'#006d82';
+    const color=station.enabled?(this.importanceEnabled?severity:arrival):'#a0a8ad';
+    c.save();c.fillStyle=color;c.strokeStyle=this.importanceEnabled?'#294f5f':'#ffffff';c.lineWidth=1.5;
     if(selected){c.beginPath();c.arc(p.x,p.y,10,0,Math.PI*2);c.strokeStyle='#063f5c';c.stroke();}
     c.beginPath();c.rect(p.x-4,p.y-4,8,8);c.fill();c.stroke();
     if(this.observed?.has(station.id)){c.strokeStyle='#efc77d';c.lineWidth=1.4;c.strokeRect(p.x-6.5,p.y-6.5,13,13);}

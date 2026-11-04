@@ -49,3 +49,7 @@ An enabled station is available after calculated P arrival + detection delay + s
 - [White et al., tomography dataset](https://data.mendeley.com/datasets/gv33tgvt5f/2)
 - [W3C WCAG 2.2 focus visible](https://www.w3.org/WAI/WCAG22/Understanding/focus-visible)
 - [Esri World Imagery attribution](https://support.esri.com/en-us/knowledge-base/what-is-the-correct-way-to-cite-an-arcgis-online-basema-000012040)
+
+## Station criticality experiment
+
+For each modeled earthquake, velocity model, enabled-station configuration, and trigger threshold k, the station-importance matrix is computed by removing one currently enabled station at a time. For station i, ΔT_i(k) = T_delivery(without i, k) − T_delivery(baseline, k). Detection, telemetry, processing, and delivery delays remain fixed across the counterfactual. A missing baseline alert, a previously disabled station, a missing P prediction, or a counterfactual that makes the alert impossible is reported separately; no missing value is replaced by zero. Because the simulation uses one global alert issue time and one common delivery delay, the effect of disabling a station on delivery time is global, not city-specific. The matrix is a leave-one-out sensitivity measure and does not quantify false alerts, redundancy under multiple simultaneous faults, or actual ShakeAlert operational station importance.

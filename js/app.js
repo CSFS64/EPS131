@@ -1,7 +1,7 @@
 import {calculateNetwork} from './physics.js';
 import {EEWMap} from './map.js';
 import {parseSTP,normalizeObservations,evaluateArrivals} from './observations.js';
-import {modelComparisons,timingStages,alertStations,topResiduals} from './research.js';
+import {modelComparisons,timingStages,alertStations,topResiduals,stationImportance,importanceColor} from './research.js';
 
 const $=id=>document.getElementById(id);
 const settings={vp:['vpKmS',true],vs:['vsKmS',true],'trigger-count':['triggersRequired',false],'detect-delay':['detectionDelayS',false],'network-delay':['networkDelayS',false],'process-delay':['processingDelayS',false],'delivery-delay':['deliveryDelayS',false]};
@@ -12,7 +12,7 @@ const f2=n=>n===null||n===undefined||!Number.isFinite(n)?'—':n.toFixed(2)+' s'
 const signed=n=>n===null||n===undefined||!Number.isFinite(n)?'—':(n>0?'+':'')+n.toFixed(2)+' s';
 const polarity=n=>n===null?'':n<0?'negative':'positive';
 let data,defaults,params,results,map,observed=null,validation=null,modelType='constant',modelData={},cases=[],observationsCache={},selectionEpoch=0;
-let elapsed=0,playing=false,speed=1,lastFrame=0,selected={kind:'city',id:'ridgecrest'},toastHandle;
+let elapsed=0,playing=false,speed=1,lastFrame=0,selected={kind:'city',id:'ridgecrest'},toastHandle,importance=null;
 const disabled=new Set();
 
 function notify(text,error=false){
@@ -103,7 +103,7 @@ function refresh(){
   results=calculateNetwork(data,params,disabled,activePredictions());
   map.results=results;
   validation=observed?evaluateArrivals(results.stations,observed):null;
-  map.render();updateReadouts();updateComparison();updateTiming();updateStationList();updateCityList();updateInspector();updateValidation();
+  updateStationImportance();map.render();updateReadouts();updateComparison();updateTiming();updateStationList();updateCityList();updateInspector();updateValidation();
 }
 
 function updateReadouts(){
@@ -151,6 +151,102 @@ function updateTiming(){
     const item=make('div','stage-item');const color=make('i','stage-color');color.style.background=stageColors[i];
     item.append(color,make('span','',part.label),make('b','',f2(part.value)));explain.append(item);
   }
+}
+
+function updateStationImportance(){
+  const container=$('station-importance');
+  const scroll=container.scrollLeft;
+  importance=stationImportance(results,15);
+  map.impactValues=new Map(importance.rows.map(row=>[row.id,row.cells.find(cell=>cell.k===importance.currentK)]));
+  const table=make('table','importance-table');
+  const head=make('thead');const headings=make('tr');
+  const label=make('th','impact-station-head','Station');label.scope='col';headings.append(label);
+  for(const k of importance.thresholds){
+    const th=make('th',k===importance.currentK?'current-k':'',String(k));th.scope='col';th.title=`Required stations: ${k}`;headings.append(th);
+  }
+  head.append(headings);table.append(head);
+  const body=make('tbody');
+  for(const row of importance.rows){
+    const tr=make('tr');
+    const name=make('th','impact-station-head');name.scope='row';
+    const stationButton=make('button','impact-station-name',row.code);stationButton.type='button';
+    stationButton.title='Locate '+row.id;
+    stationButton.addEventListener('click',()=>focusImportanceStation(row.id));
+    name.append(stationButton);tr.append(name);
+    for(const cell of row.cells){
+      const td=make('td',cell.k===importance.currentK?'current-k':'');
+      const b=make('button','impact-cell');b.type='button';b.dataset.station=row.id;b.dataset.threshold=String(cell.k);
+      b.dataset.status=cell.status;b.style.backgroundColor=importanceColor(cell);b.classList.toggle('impact-dark',cell.status==='lost'||(cell.status==='delay'&&cell.delta>=3));
+      if(cell.status==='lost')b.textContent='×';
+      else if(cell.status==='unavailable'||cell.status==='missing'||cell.status==='disabled')b.textContent='—';
+      else b.textContent=cell.delta<1e-9?'0':cell.delta<.05?'<.1':'+'+cell.delta.toFixed(1);
+      const meaning=cell.status==='lost'?'No alert':cell.status==='unavailable'?'No baseline alert':cell.status==='disabled'?'Station is disabled':cell.status==='missing'?'Missing predicted P arrival':`+${cell.delta.toFixed(3)} s`;
+      b.title=`${row.id} · k=${cell.k}: ${meaning}`;
+      b.setAttribute('aria-label',`${row.id}, ${cell.k} required: ${meaning}`);
+      b.disabled=cell.status==='disabled'||cell.status==='unavailable'||cell.status==='missing';
+      b.addEventListener('click',()=>{
+        params.triggersRequired=cell.k;$('trigger-count').value=String(cell.k);
+        selected={kind:'station',id:row.id};map.selection=selected;
+        refresh();focusImportanceStation(row.id);
+        const replacement=[...container.querySelectorAll('.impact-cell')].find(el=>el.dataset.station===row.id&&el.dataset.threshold===String(cell.k));
+        replacement?.focus({preventScroll:true});
+      });
+      td.append(b);tr.append(td);
+    }
+    body.append(tr);
+  }
+  table.append(body);container.replaceChildren(table);container.scrollLeft=scroll;
+}
+
+function focusImportanceStation(id){
+  const station=results.stations.find(s=>s.id===id);
+  if(!station)return;
+  select('station',id);
+  map.focus(station.latitude,station.longitude,Math.max(map.zoom,8));
+}
+
+function exportImportancePNG(){
+  if(!importance)return;
+  const scale=2,cellW=53,rowH=33,left=145,top=125;
+  const width=left+importance.thresholds.length*cellW+36;
+  const height=top+importance.rows.length*rowH+124;
+  const canvas=document.createElement('canvas');canvas.width=width*scale;canvas.height=height*scale;
+  const c=canvas.getContext('2d');c.scale(scale,scale);
+  c.fillStyle='#ffffff';c.fillRect(0,0,width,height);
+  c.fillStyle='#244251';c.font='700 18px Arial, sans-serif';c.fillText('Station importance',26,34);
+  c.font='13px Arial, sans-serif';c.fillText(`Ridgecrest Mw ${data.event.magnitude.toFixed(1)}  |  ${$('model-select').selectedOptions[0].text}`,26,58);
+  c.fillStyle='#546870';c.font='12px Arial, sans-serif';c.fillText('Additional alert delivery delay (s) when one station is disabled',26,79);
+  c.fillStyle='#244251';c.font='700 12px Arial, sans-serif';c.fillText('Station',26,top-14);
+  for(const [i,k] of importance.thresholds.entries()){
+    const x=left+i*cellW;
+    c.fillStyle=k===importance.currentK?'#00677c':'#244251';
+    c.font='700 12px Arial, sans-serif';c.fillText(String(k),x+cellW/2-4,top-14);
+    if(k===importance.currentK){c.fillStyle='#e3f1f4';c.fillRect(x-1,top-3,cellW+2,importance.rows.length*rowH+3);}
+  }
+  for(const [j,row] of importance.rows.entries()){
+    const y=top+j*rowH;
+    c.font='700 12px Arial, sans-serif';c.fillStyle=row.enabled?'#204b5d':'#9ca9af';c.fillText(row.id,26,y+21);
+    for(const [i,cell] of row.cells.entries()){
+      const x=left+i*cellW;
+      c.fillStyle=importanceColor(cell);c.fillRect(x+2,y+3,cellW-5,rowH-6);
+      c.strokeStyle='#9bb1b9';c.lineWidth=.7;c.strokeRect(x+2.5,y+3.5,cellW-6,rowH-7);
+      const text=cell.status==='lost'?'×':cell.delta===null?'—':cell.delta<1e-9?'0':cell.delta<.05?'<.1':'+'+cell.delta.toFixed(1);
+      c.font='600 11px Arial, sans-serif';c.fillStyle=cell.status==='lost'||(cell.status==='delay'&&cell.delta>=3)?'#ffffff':'#244251';
+      c.textAlign='center';c.fillText(text,x+cellW/2,y+21);c.textAlign='left';
+    }
+  }
+  const y=top+importance.rows.length*rowH+27;
+  const stops=[['#ffffff','0'],['#d8eaee','<0.5'],['#a8d1d9','0.5–1.5'],['#62acbb','1.5–3'],['#006d82','3+'],['#9b4542','No alert']];
+  let x=26;
+  for(const [color,label] of stops){c.fillStyle=color;c.fillRect(x,y,16,13);c.strokeStyle='#94a7ae';c.strokeRect(x+.5,y+.5,15,12);c.fillStyle='#435c68';c.font='11px Arial, sans-serif';c.fillText(label,x+21,y+11);x+=label==='No alert'?98:90;}
+  c.fillStyle='#5c727a';c.font='11px Arial, sans-serif';c.fillText('Source: EEW Lab model output; 15 research stations. Not observed ShakeAlert performance.',26,height-26);
+  canvas.toBlob(blob=>{
+    if(!blob){notify('PNG export failed',true);return;}
+    const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;
+    a.download=`station-importance-${data.event.id}-${modelType}.png`;
+    document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),3000);
+    notify('Heatmap PNG exported');
+  },'image/png');
 }
 
 function updateStationList(){
@@ -287,7 +383,7 @@ function bind(){
   $('reset-all').addEventListener('click',restoreSettings);
   $('toggle-p').addEventListener('change',e=>{map.showP=e.target.checked;map.render();});
   $('toggle-s').addEventListener('change',e=>{map.showS=e.target.checked;map.render();});
-  $('toggle-stations').addEventListener('change',e=>{map.showStations=e.target.checked;map.showLabels=e.target.checked;map.render();});
+  $('toggle-stations').addEventListener('change',e=>{map.showStations=e.target.checked;map.showLabels=e.target.checked;$('map-importance-key').hidden=!map.importanceEnabled||!map.showStations;map.render();});
   $('zoom-in').addEventListener('click',()=>map.changeZoom(.7));
   $('zoom-out').addEventListener('click',()=>map.changeZoom(-.7));
   $('recenter').addEventListener('click',()=>map.focus(data.event.latitude,data.event.longitude,8));
@@ -302,6 +398,8 @@ function bind(){
   });
   $('enable-all').addEventListener('click',()=>{disabled.clear();refresh();notify('All stations enabled');});
   $('disable-all').addEventListener('click',()=>{data.stations.forEach(s=>disabled.add(s.id));refresh();notify('All stations disabled');});
+  $('export-impact-png').addEventListener('click',exportImportancePNG);
+  $('impact-map-toggle').addEventListener('click',()=>{map.importanceEnabled=!map.importanceEnabled;const button=$('impact-map-toggle');button.setAttribute('aria-pressed',String(map.importanceEnabled));$('map-importance-key').hidden=!map.importanceEnabled;if(map.importanceEnabled&&!map.showStations){map.showStations=true;$('toggle-stations').checked=true;}map.render();});
   $('play').addEventListener('click',()=>{if(elapsed>=params.durationS)setElapsed(0);setPlay(!playing);});
   $('restart').addEventListener('click',()=>{setPlay(false);setElapsed(0);});
   $('scrubber').addEventListener('input',e=>setElapsed(Number(e.target.value)));
@@ -323,15 +421,17 @@ function bind(){
 }
 
 function exportCSV(){
-  const rows=[['EEW Lab V0.4'],['Event',data.event.id],['Model',modelType],['P velocity',params.vpKmS],['S velocity',params.vsKmS],['Trigger stations',params.triggersRequired],['Detection',params.detectionDelayS],['Telemetry',params.networkDelayS],['Processing',params.processingDelayS],['Delivery latency',params.deliveryDelayS],['Alert issue',results.issue??''],['Message delivery',results.delivered??''],[],['City','P predicted','S predicted','Delivery','S-wave lead']];
+  const rows=[['EEW Lab V0.4.6'],['Event',data.event.id],['Model',modelType],['P velocity',params.vpKmS],['S velocity',params.vsKmS],['Trigger stations',params.triggersRequired],['Detection',params.detectionDelayS],['Telemetry',params.networkDelayS],['Processing',params.processingDelayS],['Delivery latency',params.deliveryDelayS],['Alert issue',results.issue??''],['Message delivery',results.delivered??''],[],['City','P predicted','S predicted','Delivery','S-wave lead']];
   for(const city of results.cities)rows.push([city.name,city.p??'',city.s??'',results.delivered??'',city.lead??'']);
   rows.push([],['Station','Phase','Predicted','Observed','Residual']);
   for(const r of validation?.comparisons||[])rows.push([r.id,r.phase,r.predicted,r.observed,r.residual]);
   rows.push([],['Model','P MAE','P N','S MAE','S N']);
   for(const m of modelComparisons(data,params,disabled,observed,modelData))rows.push([m.label,m.p??'',m.pN??'',m.s??'',m.sN??'']);
+  rows.push([],['Station importance: one-station removal; delay in seconds'],['Station',...importance.thresholds.map(k=>'k='+k)]);
+  for(const station of importance.rows)rows.push([station.id,...station.cells.map(cell=>cell.status==='lost'?'NO_ALERT':cell.status==='unavailable'?'NO_BASELINE':cell.status==='disabled'?'DISABLED':cell.status==='missing'?'NO_PICK':cell.delta)]);
   const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');
   const url=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));
-  const a=document.createElement('a');a.href=url;a.download=`eew-lab-${data.event.id}-${modelType}-v0.4.csv`;
+  const a=document.createElement('a');a.href=url;a.download=`eew-lab-${data.event.id}-${modelType}-v0.4.6.csv`;
   document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),3000);notify('CSV exported');
 }
 
