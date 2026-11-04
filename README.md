@@ -29,7 +29,7 @@ Open `http://localhost:8000/`.
 
 ## Refresh published data
 
-The GitHub Actions workflow `Observed events and 1D travel times` retrieves phase picks from the SCEDC public archive for both events and computes iasp91 1D arrival times using ObsPy TauP. Both events and the 1D results are already present in the published repository. Automated jobs publish downloadable artifacts; model outputs are committed independently.
+The GitHub Actions workflow `Observed events and 1D travel times` retrieves phase picks from the SCEDC public archive for both events and computes iasp91 1D arrival times using ObsPy TauP. Both events and the 1D and 3D result files are present in the published repository. Automated jobs publish downloadable 1D artifacts; model outputs are committed independently.
 
 ```bash
 python -m pip install obspy==1.4.2
@@ -37,7 +37,7 @@ python pipeline/fetch_events_phases.py
 python pipeline/build_1d.py
 ```
 
-The `Ridgecrest 3D tomography` workflow is manual-only. Its automated public API request returned HTTP 401 in GitHub Actions, so the 3D arrival dataset has not been published. Users can download the published White et al. (2021) velocity CSV from Mendeley Data (https://data.mendeley.com/datasets/gv33tgvt5f/2), then use the local command below to generate the 3D output. The script integrates slowness along fixed source-to-receiver lines. The 3D calculation is **not** a full 3D ray-bending or seismic wavefield simulation; it uses the published 3D velocities under a straight-ray approximation.
+The published `data/models-3d.json` includes computed travel times for both Ridgecrest events, based on a user-provided result from the White et al. (2021) tomography velocity CSV (https://data.mendeley.com/datasets/gv33tgvt5f/2). The result reports 5,006,725 model nodes and integrates slowness along fixed source-to-receiver lines. This is **not** curved-ray 3D ray tracing or a seismic wavefield simulation. The Los Angeles city target has no valid 3D coverage; its travel times are null. The original velocity CSV is not stored in the repository. The public API downloader remains unavailable because its prior GitHub Actions request returned HTTP 401.
 
 To reproduce 3D results from a locally downloaded file:
 
@@ -47,6 +47,19 @@ python pipeline/build_3d.py --input White_et_al_2021__Ridgecrest_2019_velocity.c
 ```
 
 If a model's prediction dataset is unavailable, the model is disabled in the website. Missing arrivals are omitted from statistics and are never treated as zero. Downloaded model source files are not committed; only compact calculated arrivals are published.
+
+## Baseline travel-time comparison
+
+Mean absolute error in seconds, computed against SCEDC P/S phase picks on matching station subsets. Smaller MAE is better.
+
+| Event | Phase (n) | Constant speed | iasp91 1D | Tomography 3D straight path |
+|---|---|---:|---:|---:|
+| Mw 7.1 | P (14) | 0.244 | 0.259 | 0.541 |
+| Mw 7.1 | S (10) | 1.203 | 1.035 | 0.711 |
+| Mw 6.4 | P (15) | 0.203 | 0.272 | 0.406 |
+| Mw 6.4 | S (10) | 0.766 | 0.578 | 0.458 |
+
+3D predictions are improved for S arrivals but worse for P arrivals under the current assumptions. These results are model-to-pick comparisons, not observed ShakeAlert performance. Station elevations and datum alignment, pick quality, finite rupture, and within-sequence tomography data reuse remain methodological limitations.
 
 ## Tests
 
