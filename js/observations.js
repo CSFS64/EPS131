@@ -1,7 +1,7 @@
 export function parseSTP(text, eventId, allowedStationIds, referenceOriginUTC) {
   const allowed = new Set(allowedStationIds);
   const lines = text.replace(/\r/g, '').split('\n');
-  const header = /^\s*(\d+)\s+\S+\s+(\d{4}\/\d\d\/\d\d,\d\d:\d\d:\d\d(?:\.\d+)?)/;
+  const header = /^\s*(\d+)\s+\S+\s+(?:\S+\s+)?(\d{4}\/\d\d\/\d\d,\d\d:\d\d:\d\d(?:\.\d+)?)/;
   let originMs = null;
   const matches = new Map();
   for (const line of lines) {

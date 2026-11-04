@@ -28,6 +28,15 @@ class PhaseParserTest(unittest.TestCase):
         self.assertEqual(len(result["observations"]), 2)
         self.assertAlmostEqual(result["originOffsetSeconds"], 0.5)
 
+    def test_real_scedc_header(self):
+        raw = "\\n".join([
+            "  38457511 eq  l 2019/07/06,03:19:53.040   35.7695   -117.5993   8.00  7.10  w 0.5",
+            "\\tCI    CLC HHZ --   35.8157  -117.5975   775.0 P d. i  0.8    5.14   0.628"
+        ])
+        result = build_output(raw, self.event)
+        self.assertEqual(len(result["observations"]), 1)
+        self.assertAlmostEqual(result["observations"][0]["p"], 0.668)
+
     def test_wrong_event_rejected(self):
         with self.assertRaises(ValueError):
             read_phase_text(self.text.replace("38457511 le", "12345678 le"), "38457511")

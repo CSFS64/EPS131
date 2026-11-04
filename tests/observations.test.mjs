@@ -13,6 +13,12 @@ test('import STP picks adjusts origin and deduplicates channels',()=>{
  const o=normalizeObservations(parsed,data.event.id,data.stations.map(s=>s.id));
  assert.equal(o.size,2);
 });
+test('real SCEDC header with eq l and arrival offsets',()=>{
+ const raw='  38457511 eq  l 2019/07/06,03:19:53.040   35.7695   -117.5993   8.00  7.10  w 0.5\n\tCI    CLC HHZ --   35.8157  -117.5975   775.0 P d. i  0.8    5.14   0.628';
+ const observed=parseSTP(raw,data.event.id,data.stations.map(x=>x.id),data.event.originUTC);
+ assert.equal(observed.observations.length,1);
+ assert.ok(Math.abs(observed.observations[0].p-0.668)<1e-8);
+});
 test('no matching header throws',()=>assert.throws(()=>parseSTP(sample.replace('38457511 le','10000000 le'),data.event.id,data.stations.map(s=>s.id),data.event.originUTC)));
 test('validation computes signed residual and MAE',()=>{
  const m=new Map([['CI.CLC',{p:2,s:5}],['CI.CCC',{p:7}]]);
