@@ -257,7 +257,7 @@ function setElapsed(t){
 }
 
 function setPlay(value){
-  playing=value;$('play').setAttribute('aria-label',value?'Pause':'Play');$('play').title=value?'Pause':'Play';
+  playing=value;$('play').setAttribute('aria-pressed',String(value));$('play').setAttribute('aria-label',value?'Pause':'Play');$('play').title=value?'Pause':'Play';
   $('play').textContent=value?'Ⅱ':'▶';
 }
 
