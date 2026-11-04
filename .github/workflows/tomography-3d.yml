@@ -1,10 +1,6 @@
 name: Ridgecrest 3D tomography
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - 'pipeline/build_3d.py'
-      - '.github/workflows/tomography-3d.yml'
 permissions:
   contents: write
 jobs:

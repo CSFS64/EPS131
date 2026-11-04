@@ -29,7 +29,7 @@ Open `http://localhost:8000/`.
 
 ## Refresh published data
 
-The GitHub Actions workflow `Observed events and 1D travel times` retrieves phase picks from the SCEDC public archive for both events and computes iasp91 1D arrival times using ObsPy TauP.
+The GitHub Actions workflow `Observed events and 1D travel times` retrieves phase picks from the SCEDC public archive for both events and computes iasp91 1D arrival times using ObsPy TauP. Both events and the 1D results are already present in the published repository. Automated jobs publish downloadable artifacts; model outputs are committed independently.
 
 ```bash
 python -m pip install obspy==1.4.2
@@ -37,7 +37,7 @@ python pipeline/fetch_events_phases.py
 python pipeline/build_1d.py
 ```
 
-The `Ridgecrest 3D tomography` workflow retrieves White et al. (2021) tomography data (if accessible) and integrates slowness along fixed source-to-receiver lines. The 3D calculation is **not** a full 3D ray-bending or seismic wavefield simulation; it uses the published 3D velocities under a straight-ray approximation.
+The `Ridgecrest 3D tomography` workflow is manual-only. Its automated public API request returned HTTP 401 in GitHub Actions, so the 3D arrival dataset has not been published. Users can download the published White et al. (2021) velocity CSV from Mendeley Data (https://data.mendeley.com/datasets/gv33tgvt5f/2), then use the local command below to generate the 3D output. The script integrates slowness along fixed source-to-receiver lines. The 3D calculation is **not** a full 3D ray-bending or seismic wavefield simulation; it uses the published 3D velocities under a straight-ray approximation.
 
 To reproduce 3D results from a locally downloaded file:
 
