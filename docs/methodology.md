@@ -29,6 +29,8 @@ For each source-to-receiver segment, it samples 121 positions and estimates Vp/V
 
 The tomography was itself derived from earthquakes in the 2019 sequence. Comparing it with the 2019 Mw 6.4 and 7.1 picks is useful as a software and model comparison, but **does not constitute a fully independent out-of-sample test of the tomography**.
 
+The computed 3D arrival data have now been published in `data/models-3d.json`. The submitted output reports 5,006,725 original velocity nodes, and preserves `null` for Los Angeles where the required spatial coverage is unavailable. The compact output was checked for schema validity, positive finite times and matching event/receiver IDs; the large raw tomography CSV was not available for independent recomputation here. These values are derived numerical predictions, not observed phase arrivals.
+
 ## Validation
 
 For each station and phase with both a valid observed pick and a valid modeled arrival, residual = predicted − observed, MAE = mean absolute residual, Bias = mean signed residual, RMSE = root mean square residual. Positive residuals indicate late predictions, and negative residuals indicate early predictions. Model-specific missing predictions can change sample sizes. Scientific comparisons require matching station subsets and checking phase-pick quality.
