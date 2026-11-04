@@ -1,19 +1,19 @@
-# EEW Lab V0.3
+# EEW Lab V0.4
 
 [Open website](https://csfs64.github.io/EPS131/) · [Methods](docs/methodology.md)
 
 Interactive earthquake arrival-time analysis for the July 2019 Ridgecrest Mw 6.4 and Mw 7.1 earthquakes.
 
-## Controls
+## Workspace
 
-- **Event:** Select either historical USGS event.
-- **Model:** Select constant-speed baseline, TauP iasp91 1D (when computed data are present), or Ridgecrest 3D tomography (when computed data are present).
-- **Propagation:** Adjust constant-speed P and S velocities; wavefront circles are displayed only for the constant-speed baseline.
-- **Stations:** Review 15 real research station locations and change simulated trigger-network availability.
-- **Validation:** Compare modeled station arrivals with SCEDC phase picks; view MAE, signed bias, and per-station residuals.
-- **Latency:** Adjust simulated trigger and notification delays; export results as CSV.
-- **Map:** Satellite (Esri), Street (OpenStreetMap), and offline coordinate Grid.
-- **Keyboard:** Tab navigates controls; visible border indicates keyboard focus; Left/Right switches analysis tabs; Space toggles playback when no control is focused.
+The page is organized as a fixed global toolbar and four independent, collapsible research modules. The toolbar keeps the earthquake, propagation model, satellite/street/grid basemap, CSV export and experiment reset available at all times.
+
+- **Model accuracy:** Compare P- and S-wave MAE across constant-speed, iasp91 TauP 1D, and Ridgecrest 3D straight-path velocity integrations. Set baseline velocities when the constant model is selected.
+- **Alert timing:** Inspect issue/delivery times and a five-stage origin-to-delivery breakdown. Change the station trigger threshold, detection, telemetry, processing, and delivery delays.
+- **Station network:** Review arrival ordering and stations contributing to the current hypothetical trigger. Enable/disable individual sites or all sites.
+- **Observed residuals:** Inspect bias, largest absolute residuals and the SCEDC arrival-pick table. Import .phase or .json picks.
+- **Map:** Review epicenters, stations, cities, and constant-speed P/S wavefronts. Satellite uses Esri imagery, Street uses OpenStreetMap, and Grid works offline.
+- **Keyboard:** Native Tab/Shift+Tab navigation and visible 3px focus outlines. Details summaries toggle with Enter or Space. Buttons do not scale and panels do not fade.
 
 Only the historical earthquake origin and station coordinates are verified inputs to all scenarios. SCEDC phase-pick times are recorded observations. All modeled arrival times and alerts are calculations, not actual historical ShakeAlert messages. Station membership does not establish participation in the operational ShakeAlert network.
 
@@ -29,7 +29,7 @@ Open `http://localhost:8000/`.
 
 ## Refresh published data
 
-The GitHub Actions workflow `Observed events and 1D travel times` retrieves phase picks from the SCEDC public archive for both events and computes iasp91 1D arrival times using ObsPy TauP. Both events and the 1D and 3D result files are present in the published repository. Automated jobs publish downloadable 1D artifacts; model outputs are committed independently.
+The GitHub Actions workflow `Observed events and 1D travel times` retrieves phase picks from the SCEDC public archive for both events and computes iasp91 1D arrival times using ObsPy TauP. Both events and the 1D and 3D results are present in the published repository. Automated jobs publish downloadable 1D artifacts; model outputs are committed independently.
 
 ```bash
 python -m pip install obspy==1.4.2

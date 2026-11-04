@@ -4,90 +4,144 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#087f90">
-<title>EEW Lab | Earthquake travel-time analysis</title>
+<title>EEW Lab | Earthquake warning analysis</title>
 <link rel="stylesheet" href="./css/style.css">
 </head>
 <body>
+<svg xmlns="http://www.w3.org/2000/svg" class="icon-library" aria-hidden="true">
+<symbol id="ic-waves" viewBox="0 0 24 24"><path d="M2 12c2-7 4 7 6 0s4-7 6 0 4 7 8 0"/></symbol>
+<symbol id="ic-layers" viewBox="0 0 24 24"><path d="m12 2 9 5-9 5-9-5 9-5ZM3 12l9 5 9-5M3 17l9 5 9-5"/></symbol>
+<symbol id="ic-timer" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6m-3 0v3"/></symbol>
+<symbol id="ic-radio" viewBox="0 0 24 24"><path d="M5 19h14M12 19v-7m-3 7 3-7 3 7M5.5 5.5a9 9 0 0 0 0 13M18.5 5.5a9 9 0 0 1 0 13M8 8a5 5 0 0 0 0 7M16 8a5 5 0 0 1 0 7"/></symbol>
+<symbol id="ic-chart" viewBox="0 0 24 24"><path d="M3 3v18h18M7 16v-4m5 4V7m5 9v-7"/></symbol>
+<symbol id="ic-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="ic-up" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></symbol>
+<symbol id="ic-download" viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4M4 17v4h16v-4"/></symbol>
+<symbol id="ic-reset" viewBox="0 0 24 24"><path d="M3 11a9 9 0 1 1 2.6 6.4M3 4v7h7"/></symbol>
+<symbol id="ic-play" viewBox="0 0 24 24"><path d="m8 5 12 7-12 7z"/></symbol>
+<symbol id="ic-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+<symbol id="ic-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></symbol>
+<symbol id="ic-crosshair" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 1v3m0 16v3M1 12h3m16 0h3"/></symbol>
+<symbol id="ic-file" viewBox="0 0 24 24"><path d="M13 2H5v20h14V8l-6-6ZM13 2v6h6M8 13h8m-8 4h8"/></symbol>
+<symbol id="ic-link" viewBox="0 0 24 24"><path d="M14 5h5v5M19 5l-9 9M19 13v6H5V5h6"/></symbol>
+<symbol id="ic-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></symbol>
+<symbol id="ic-map" viewBox="0 0 24 24"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15"/></symbol>
+<symbol id="ic-location" viewBox="0 0 24 24"><path d="M12 22s8-8 8-14a8 8 0 1 0-16 0c0 6 8 14 8 14Z"/><circle cx="12" cy="8" r="2.5"/></symbol>
+<symbol id="ic-upload" viewBox="0 0 24 24"><path d="M12 16V3m-5 5 5-5 5 5M4 17v4h16v-4"/></symbol>
+<symbol id="ic-check" viewBox="0 0 24 24"><path d="m4 12 5 5 11-11"/></symbol>
+<symbol id="ic-warning" viewBox="0 0 24 24"><path d="m12 3 10 18H2L12 3Zm0 7v4m0 4h.01"/></symbol>
+<symbol id="ic-satellite" viewBox="0 0 24 24"><path d="m7 13 4 4 6-6-4-4-6 6ZM3 13l4 4M7 3l4 4m6 6 4 4M13 21a8 8 0 0 0 8-8"/></symbol>
+</svg>
 <div class="app-shell">
   <header class="topbar">
-    <a class="brand" href="./" aria-label="EEW Lab home">EEW <span>LAB</span></a>
-    <span class="bar-separator"></span>
-    <span class="project-title">Seismic arrival analysis</span>
-    <span class="event-tag" id="event-tag">Mw 7.1</span>
-    <div class="top-actions"><span id="load-state" class="load-state">Loading</span><a class="source-link" href="https://github.com/CSFS64/EPS131" target="_blank" rel="noopener">Source ↗</a></div>
+    <a class="brand" href="./" aria-label="EEW Lab homepage"><svg class="icon"><use href="#ic-waves"/></svg><span>EEW Lab</span></a>
+    <span class="topbar-title">Ridgecrest · 2019</span>
+    <div class="global-controls">
+      <label class="global-field" for="event-select"><span>Event</span><select id="event-select"><option value="ci38457511">Mw 7.1 · July 6</option><option value="ci38443183">Mw 6.4 · July 4</option></select></label>
+      <label class="global-field" for="model-select"><span>Model</span><select id="model-select"><option value="constant">Constant velocity</option><option value="1d" disabled>iasp91 · 1D (loading)</option><option value="3d" disabled>Tomography · 3D (loading)</option></select></label>
+      <label class="global-field map-field" for="base-select"><span>Map</span><select id="base-select"><option value="satellite">Satellite</option><option value="street">Street</option><option value="grid">Grid</option></select></label>
+      <button type="button" class="toolbar-button" id="export-results" title="Export results as CSV"><svg class="icon"><use href="#ic-download"/></svg><span>Export CSV</span></button>
+      <button type="button" class="toolbar-button" id="reset-all" title="Reset experiment settings"><svg class="icon"><use href="#ic-reset"/></svg><span>Reset</span></button>
+      <a class="toolbar-button source-link" href="https://github.com/CSFS64/EPS131" target="_blank" rel="noopener"><svg class="icon"><use href="#ic-link"/></svg><span>Source</span></a>
+    </div>
   </header>
   <div class="main-grid">
-    <aside class="sidebar">
-      <div class="tabs" role="tablist" aria-label="Analysis tools">
-        <button class="tab selected" id="tab-simulation" data-panel="simulation" role="tab" aria-controls="panel-simulation" aria-selected="true">Propagation</button>
-        <button class="tab" id="tab-stations" data-panel="stations" role="tab" aria-controls="panel-stations" aria-selected="false">Stations</button>
-        <button class="tab" id="tab-validation" data-panel="validation" role="tab" aria-controls="panel-validation" aria-selected="false">Validation</button>
-        <button class="tab" id="tab-latency" data-panel="latency" role="tab" aria-controls="panel-latency" aria-selected="false">Latency</button>
-      </div>
-      <div class="side-scroll">
-        <section id="panel-simulation" class="side-panel active" role="tabpanel" aria-labelledby="tab-simulation">
-          <div class="section-label">EVENT</div>
-          <label class="form-label" for="event-select">Historical event</label><select id="event-select" class="field-select"><option value="ci38457511">Ridgecrest 2019 · Mw 7.1</option><option value="ci38443183">Ridgecrest 2019 · Mw 6.4</option></select>
-          <div class="stat-grid"><div><small>Origin UTC</small><b id="origin-readout">06 Jul 2019 03:19:53</b></div><div><small>Depth</small><b id="depth-readout">8.0 km</b></div></div>
-          <div class="section-label">VELOCITY MODEL</div>
-          <label class="form-label" for="model-select">Travel-time model</label><select id="model-select" class="field-select"><option value="constant">Constant velocity</option><option value="1d" disabled>iasp91 · TauP 1D (loading)</option><option value="3d" disabled>Ridgecrest tomography · 3D (unavailable)</option></select><div class="data-status model-status" id="model-status">Baseline: fixed velocities</div>
-          <div class="slider-field"><div class="field-head"><label for="vp">P velocity</label><output id="vp-out">6.0 km/s</output></div><input id="vp" type="range" min="4.5" max="7.5" step="0.1" value="6"></div>
-          <div class="slider-field"><div class="field-head"><label for="vs">S velocity</label><output id="vs-out">3.5 km/s</output></div><input id="vs" type="range" min="2.5" max="4.5" step="0.1" value="3.5"></div>
-          <div class="section-label">LAYERS</div>
-          <label class="toggle-line"><span><i class="line-swatch p"></i>P wave</span><input id="toggle-p" type="checkbox" checked></label>
-          <label class="toggle-line"><span><i class="line-swatch s"></i>S wave</span><input id="toggle-s" type="checkbox" checked></label>
-          <label class="toggle-line"><span><i class="dot-swatch"></i>Stations</span><input id="toggle-stations" type="checkbox" checked></label>
-          <button class="simple-button reset-button" id="reset-velocities">Reset velocities</button>
-        </section>
-        <section id="panel-stations" class="side-panel" role="tabpanel" aria-labelledby="tab-stations" hidden>
-          <div class="row-between section-head"><span class="section-label no-margin">STATION SUBSET</span><b id="station-count">15 / 15</b></div>
-          <div class="button-group"><button class="simple-button" id="enable-all">All on</button><button class="simple-button" id="disable-all">All off</button></div>
-          <div id="station-list" class="station-list"></div>
-        </section>
-        <section id="panel-validation" class="side-panel" role="tabpanel" aria-labelledby="tab-validation" hidden>
-          <div class="row-between section-head"><span class="section-label no-margin">SCEDC PHASE PICKS</span><span id="pick-count">0 picks</span></div>
-          <div id="validation-status" class="data-status">No observations loaded</div>
-          <div class="stat-grid validation-stats"><div><small>P MAE</small><b id="p-mae">—</b></div><div><small>S MAE</small><b id="s-mae">—</b></div><div><small>P bias</small><b id="p-bias">—</b></div><div><small>S bias</small><b id="s-bias">—</b></div></div>
-          <div class="section-label">IMPORT</div>
-          <button class="file-button" type="button" id="phase-file-trigger">Import .phase or .json</button><input type="file" id="phase-file" accept=".phase,.txt,.json,text/plain,application/json" hidden>
-          <div class="file-name" id="import-state">—</div>
-          <a class="external-row" href="https://scedc.caltech.edu/data/cloud.html" target="_blank" rel="noopener">SCEDC data ↗</a>
-          <div class="section-label">MODEL COMPARISON</div><div class="data-table-scroll"><table class="compact-table" aria-label="Model comparison"><thead><tr><th>Model</th><th>P MAE</th><th>S MAE</th></tr></thead><tbody id="comparison-rows"><tr><td colspan="3">Loading</td></tr></tbody></table></div><div class="section-label">PICK COMPARISON</div>
-          <div class="data-table-scroll"><table class="compact-table" aria-label="Observed and modeled arrivals"><thead><tr><th>Station</th><th>Phase</th><th>Δt</th></tr></thead><tbody id="pick-rows"><tr><td colspan="3">No data</td></tr></tbody></table></div>
-        </section>
-        <section id="panel-latency" class="side-panel" role="tabpanel" aria-labelledby="tab-latency" hidden>
-          <div class="section-label">TRIGGER</div>
-          <div class="slider-field"><div class="field-head"><label for="trigger-count">Stations required</label><output id="trigger-count-out">4</output></div><input id="trigger-count" type="range" min="1" max="15" step="1" value="4"></div>
-          <div class="section-label">DELAYS</div>
-          <div class="slider-field"><div class="field-head"><label for="detect-delay">Detection</label><output id="detect-delay-out">0.8 s</output></div><input id="detect-delay" type="range" min="0" max="6" step="0.2" value="0.8"></div>
-          <div class="slider-field"><div class="field-head"><label for="network-delay">Station telemetry</label><output id="network-delay-out">1.0 s</output></div><input id="network-delay" type="range" min="0" max="12" step="0.2" value="1"></div>
-          <div class="slider-field"><div class="field-head"><label for="process-delay">Processing</label><output id="process-delay-out">1.2 s</output></div><input id="process-delay" type="range" min="0" max="10" step="0.2" value="1.2"></div>
-          <div class="slider-field"><div class="field-head"><label for="delivery-delay">User delivery</label><output id="delivery-delay-out">3.0 s</output></div><input id="delivery-delay" type="range" min="0" max="20" step="0.2" value="3"></div>
-          <div class="button-group buttons-spaced"><button class="simple-button" id="reset-latency">Reset</button><button class="simple-button primary" id="export-results">Export CSV</button></div>
-        </section>
-      </div>
-      <div class="sidebar-footer"><a href="./docs/methodology.md" target="_blank">Methods ↗</a><span>V0.3</span></div>
-    </aside>
-    <main class="workspace">
-      <section class="map-stage" aria-label="Seismic propagation map">
-        <canvas id="map" aria-label="Map of earthquake wave arrivals and seismic stations"></canvas>
-        <div class="map-toolbar" role="group" aria-label="Basemap selection"><button class="map-mode selected" data-base="satellite" aria-pressed="true">Satellite</button><button class="map-mode" data-base="street" aria-pressed="false">Street</button><button class="map-mode" data-base="grid" aria-pressed="false">Grid</button></div>
-        <div class="map-zoom"><button id="zoom-in" title="Zoom in" aria-label="Zoom in">+</button><button id="zoom-out" title="Zoom out" aria-label="Zoom out">−</button><button id="recenter" title="Reset view" aria-label="Reset map">⌖</button></div>
-        <div class="map-legend"><span><i class="line-swatch p"></i>P</span><span><i class="line-swatch s"></i>S</span><span><i class="dot-swatch"></i>Stations</span></div>
+    <main class="map-workspace">
+      <div class="map-heading"><svg class="icon"><use href="#ic-map"/></svg><strong>Map</strong><span id="origin-readout">2019-07-06 03:19:53 UTC</span><span class="small-separator">·</span><span id="depth-readout">Depth 8 km</span><span class="map-status" id="load-state">Loading</span></div>
+      <div class="map-stage">
+        <canvas id="map" aria-label="Interactive epicenter, station and city map"></canvas>
+        <div class="map-zoom">
+          <button type="button" id="zoom-in" title="Zoom in" aria-label="Zoom in">+</button>
+          <button type="button" id="zoom-out" title="Zoom out" aria-label="Zoom out">−</button>
+          <button type="button" id="recenter" title="Recenter map" aria-label="Recenter map"><svg class="icon"><use href="#ic-crosshair"/></svg></button>
+        </div>
+        <div class="map-legend"><span><i class="line-swatch p"></i>P</span><span><i class="line-swatch s"></i>S</span><span><i class="station-swatch"></i>Station</span></div>
         <div class="map-attribution" id="map-attribution">Imagery © Esri, Maxar, Earthstar Geographics, GIS User Community</div>
-      </section>
-      <aside class="results">
-        <div class="results-top"><small id="selected-kind">CITY</small><h1 id="selected-name">Ridgecrest</h1><span id="selected-distance">—</span></div>
-        <div class="lead-panel"><div id="lead-label">S-wave lead</div><div class="lead-value" id="lead-value">—</div><span id="lead-state">Modeled</span></div>
-        <div class="section-label inside">SYSTEM TIMING</div><div class="metric-rows" id="system-times"></div>
-        <div class="section-label inside">CITIES</div><div class="city-list" id="city-list"></div>
-        <div class="validation-drawer" id="validation-drawer" hidden><div class="section-label inside">ARRIVAL RESIDUALS · PREDICTED − OBSERVED</div><canvas id="residual-chart" height="160" aria-label="Arrival time error chart"></canvas><div class="chart-meta" id="residual-summary">—</div></div>
-        <div class="results-foot" id="result-basis">Model · constant Vp / Vs</div>
-      </aside>
-      <footer class="playback"><div class="play-buttons"><button class="play-button" id="play" aria-label="Play">▶</button><button class="play-secondary" id="restart" aria-label="Restart">↺</button></div><div class="timer"><small>ELAPSED</small><b id="time-readout">00:00.0</b></div><div class="timeline"><input id="scrubber" type="range" min="0" max="120" step="0.1" value="0" aria-label="Simulation time"><div class="timeline-ends"><span>t = 0</span><span id="duration-readout">120 s</span></div></div><div class="speed-box"><label for="speed">SPEED</label><select id="speed"><option value=".5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select></div></footer>
+      </div>
+      <div class="map-layers">
+        <label class="layer-control"><input id="toggle-p" type="checkbox" checked><span><i class="line-swatch p"></i>P wave</span></label>
+        <label class="layer-control"><input id="toggle-s" type="checkbox" checked><span><i class="line-swatch s"></i>S wave</span></label>
+        <label class="layer-control"><input id="toggle-stations" type="checkbox" checked><span><i class="station-swatch"></i>Stations</span></label>
+        <span class="layer-info" id="wavefront-note">Wavefronts: constant-velocity model</span>
+      </div>
+      <div class="selection-strip">
+        <div class="selection-identity"><span class="selected-type" id="selected-kind">CITY</span><strong id="selected-name">Ridgecrest</strong><span id="selected-distance">—</span></div>
+        <div class="selection-metric"><span id="lead-label">S-wave lead</span><strong id="lead-value">—</strong><span class="selection-state" id="lead-state">Modeled</span></div>
+      </div>
+      <div class="playback">
+        <div class="play-buttons"><button class="icon-button" id="play" aria-label="Play" title="Play"><svg class="icon" id="play-icon"><use href="#ic-play"/></svg></button><button class="icon-button" id="restart" aria-label="Restart" title="Restart"><svg class="icon"><use href="#ic-reset"/></svg></button></div>
+        <div class="timer" id="time-readout">00:00.0</div>
+        <div class="timeline"><input id="scrubber" type="range" min="0" max="120" step="0.1" value="0" aria-label="Simulation time"><div class="timeline-ends"><span>0 s</span><span id="duration-readout">120 s</span></div></div>
+        <label class="speed-box" for="speed">Speed<select id="speed"><option value=".5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select></label>
+      </div>
+      <div class="map-foot"><span id="result-basis">Baseline prediction · simulated latency</span><a href="./docs/methodology.md" target="_blank" rel="noopener"><svg class="icon"><use href="#ic-info"/></svg>Methods</a></div>
     </main>
+    <aside class="research-workspace" aria-label="Research modules">
+      <div class="research-head"><span>Analysis</span><span class="research-count">4 modules</span></div>
+      <div class="research-scroll">
+        <details class="research-section" id="section-models" open>
+          <summary><svg class="icon section-icon"><use href="#ic-layers"/></svg><span class="section-heading">Model accuracy</span><small id="model-brief">P — · S —</small><svg class="icon chevron"><use href="#ic-down"/></svg></summary>
+          <div class="section-body">
+            <div class="section-subtitle">Observed vs. predicted · MAE</div>
+            <div class="mae-pair">
+              <div class="mae-item"><span><i class="phase-symbol p">P</i> P-wave MAE</span><strong id="p-mae">—</strong></div>
+              <div class="mae-item"><span><i class="phase-symbol s">S</i> S-wave MAE</span><strong id="s-mae">—</strong></div>
+            </div>
+            <div class="section-subtitle">Compare models <span class="field-hint">Select a row to change model</span></div>
+            <div id="comparison-list" class="comparison-list"></div>
+            <div id="model-status" class="field-hint model-status">Fixed-velocity straight rays</div>
+            <div id="velocity-fields" class="velocity-fields">
+              <div class="section-subtitle">Baseline velocities</div>
+              <div class="parameter"><div class="parameter-head"><label for="vp">P velocity</label><output id="vp-out">6.0 km/s</output></div><input id="vp" type="range" min="4.5" max="7.5" step="0.1" value="6"></div>
+              <div class="parameter"><div class="parameter-head"><label for="vs">S velocity</label><output id="vs-out">3.5 km/s</output></div><input id="vs" type="range" min="2.5" max="4.5" step="0.1" value="3.5"></div>
+              <button class="minor-button" type="button" id="reset-velocities"><svg class="icon"><use href="#ic-reset"/></svg>Reset velocities</button>
+            </div>
+          </div>
+        </details>
+        <details class="research-section" id="section-timing" open>
+          <summary><svg class="icon section-icon"><use href="#ic-timer"/></svg><span class="section-heading">Alert timing</span><small id="timing-brief">Delivery —</small><svg class="icon chevron"><use href="#ic-down"/></svg></summary>
+          <div class="section-body">
+            <div class="metric-pair"><div class="small-stat"><span>Issue time</span><strong id="issue-main">—</strong></div><div class="small-stat"><span>User delivery</span><strong id="delivered-main">—</strong></div></div>
+            <div class="section-subtitle">Time from origin to delivery</div>
+            <div id="timing-strip" class="timing-strip" aria-label="Alert timing stages"></div>
+            <div id="timing-breakdown" class="timing-breakdown"></div>
+            <div class="section-subtitle">Trigger and latency settings</div>
+            <div class="parameter"><div class="parameter-head"><label for="trigger-count">Stations required</label><output id="trigger-count-out">4</output></div><input id="trigger-count" type="range" min="1" max="15" step="1" value="4"></div>
+            <div class="parameter"><div class="parameter-head"><label for="detect-delay">Detection</label><output id="detect-delay-out">0.8 s</output></div><input id="detect-delay" type="range" min="0" max="6" step="0.2" value="0.8"></div>
+            <div class="parameter"><div class="parameter-head"><label for="network-delay">Station telemetry</label><output id="network-delay-out">1.0 s</output></div><input id="network-delay" type="range" min="0" max="12" step="0.2" value="1"></div>
+            <div class="parameter"><div class="parameter-head"><label for="process-delay">Processing</label><output id="process-delay-out">1.2 s</output></div><input id="process-delay" type="range" min="0" max="10" step="0.2" value="1.2"></div>
+            <div class="parameter"><div class="parameter-head"><label for="delivery-delay">User delivery</label><output id="delivery-delay-out">3.0 s</output></div><input id="delivery-delay" type="range" min="0" max="20" step="0.2" value="3"></div>
+            <div class="section-actions"><button type="button" id="reset-latency" class="minor-button"><svg class="icon"><use href="#ic-reset"/></svg>Reset latency</button></div>
+            <div class="section-subtitle">City S-wave lead times</div>
+            <div id="city-list" class="city-list"></div>
+          </div>
+        </details>
+        <details class="research-section" id="section-stations">
+          <summary><svg class="icon section-icon"><use href="#ic-radio"/></svg><span class="section-heading">Station network</span><small id="station-brief">15 active · 4 needed</small><svg class="icon chevron"><use href="#ic-down"/></svg></summary>
+          <div class="section-body">
+            <div class="section-actions"><button type="button" id="enable-all" class="minor-button"><svg class="icon"><use href="#ic-check"/></svg>Enable all</button><button type="button" id="disable-all" class="minor-button">Disable all</button></div>
+            <div class="section-subtitle">Arrival order <span id="station-count" class="field-hint">15 / 15</span></div>
+            <div class="key-legend"><span><i class="trigger-mark"></i>Contributing to issue time</span><span>Click a station to locate</span></div>
+            <div id="station-list" class="station-list"></div>
+          </div>
+        </details>
+        <details class="research-section" id="section-observed">
+          <summary><svg class="icon section-icon"><use href="#ic-chart"/></svg><span class="section-heading">Observed residuals</span><small id="observed-brief">Loading picks</small><svg class="icon chevron"><use href="#ic-down"/></svg></summary>
+          <div class="section-body">
+            <div id="validation-status" class="data-status">No observations loaded</div>
+            <div class="metric-pair"><div class="small-stat"><span>P bias</span><strong id="p-bias">—</strong></div><div class="small-stat"><span>S bias</span><strong id="s-bias">—</strong></div></div>
+            <div class="section-subtitle">Largest absolute residuals <span class="field-hint">Predicted − observed</span></div>
+            <div id="residual-chart" class="residual-chart"></div>
+            <div class="chart-foot" id="residual-summary">No observed arrivals</div>
+            <div class="section-subtitle">All picks <span id="pick-count" class="field-hint">0 picks</span></div>
+            <div class="data-table-scroll"><table class="compact-table" aria-label="Observed and predicted arrival differences"><thead><tr><th>Station</th><th>Phase</th><th>Residual</th></tr></thead><tbody id="pick-rows"><tr><td colspan="3">No data</td></tr></tbody></table></div>
+            <div class="section-actions import-row"><button type="button" class="minor-button" id="phase-file-trigger"><svg class="icon"><use href="#ic-upload"/></svg>Import picks</button><input id="phase-file" type="file" accept=".phase,.txt,.json,text/plain,application/json" hidden><span class="file-name" id="import-state">SCEDC data</span><a class="minor-button" href="https://scedc.caltech.edu/data/cloud.html" target="_blank" rel="noopener">SCEDC<svg class="icon"><use href="#ic-link"/></svg></a></div>
+          </div>
+        </details>
+      </div>
+    </aside>
   </div>
-  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
 </div>
 <script type="module" src="./js/app.js"></script>
 </body>
