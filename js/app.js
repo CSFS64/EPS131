@@ -5,14 +5,10 @@ import {modelComparisons,timingStages,alertStations,topResiduals} from './resear
 
 const $=id=>document.getElementById(id);
 const settings={vp:['vpKmS',true],vs:['vsKmS',true],'trigger-count':['triggersRequired',false],'detect-delay':['detectionDelayS',false],'network-delay':['networkDelayS',false],'process-delay':['processingDelayS',false],'delivery-delay':['deliveryDelayS',false]};
-const labels={constant:'Constant velocity · straight rays','1d':'iasp91 · 1D spherical TauP','3d':'Tomography · straight-path 3D integration'};
 const phases={p:'P',s:'S'};
 const stageColors=['#376f86','#80a6b3','#a9c0c8','#c2a476','#b98067'];
-const $svg=(name)=>{const s=document.createElementNS('http://www.w3.org/2000/svg','svg');s.setAttribute('class','icon');s.setAttribute('aria-hidden','true');const u=document.createElementNS('http://www.w3.org/2000/svg','use');u.setAttribute('href','#ic-'+name);s.append(u);return s;};
 const make=(tag,cls='',value='')=>{const e=document.createElement(tag);if(cls)e.className=cls;if(value!==undefined&&value!==null)e.textContent=String(value);return e;};
 const f2=n=>n===null||n===undefined||!Number.isFinite(n)?'—':n.toFixed(2)+' s';
-const f1=n=>n===null||n===undefined||!Number.isFinite(n)?'—':n.toFixed(1)+' s';
-const num=n=>n===null||n===undefined||!Number.isFinite(n)?'—':n.toFixed(1);
 const signed=n=>n===null||n===undefined||!Number.isFinite(n)?'—':(n>0?'+':'')+n.toFixed(2)+' s';
 const polarity=n=>n===null?'':n<0?'negative':'positive';
 let data,defaults,params,results,map,observed=null,validation=null,modelType='constant',modelData={},cases=[],observationsCache={},selectionEpoch=0;
@@ -32,8 +28,8 @@ async function init(){
     data={...collection,event:cases[0]};params={...collection.model};defaults={...params};
     map=new EEWMap($('map'),select);map.data=data;map.selection=selected;
     $('scrubber').max=params.durationS;$('duration-readout').textContent=params.durationS+' s';
-    bind();updateEventReadout();refresh();setElapsed(0);
-    $('load-state').textContent=`${data.stations.length} stations`;
+    bind();refresh();setElapsed(0);
+    $('load-state').textContent='';
     lastFrame=performance.now();requestAnimationFrame(frame);
     await Promise.all([loadPredictions('1d'),loadPredictions('3d')]);
     await loadObservations();
@@ -76,23 +72,16 @@ async function loadObservations(){
 function useObservations(raw,source){
   observed=normalizeObservations(raw,data.event.id,data.stations.map(x=>x.id));
   map.observed=observed;
-  $('validation-status').textContent=`${observed.size} stations · ${source}`;
+  $('validation-status').textContent=`${source} picks`;
   $('validation-status').classList.remove('empty');
   refresh();notify(`${observed.size} stations: observations loaded`);
-}
-
-function updateEventReadout(){
-  const ev=data.event;
-  $('event-select').value=ev.id;
-  $('origin-readout').textContent=ev.originUTC.replace('T',' ').replace('Z',' UTC');
-  $('depth-readout').textContent=`Depth ${ev.depthKm.toFixed(1)} km`;
 }
 
 function selectEvent(id){
   const event=cases.find(x=>x.id===id);
   if(!event||event.id===data.event.id)return;
   data={...data,event};map.data=data;selected={kind:'city',id:'ridgecrest'};map.selection=selected;
-  updateEventReadout();map.focus(event.latitude,event.longitude,8);
+  $('event-select').value=event.id;map.focus(event.latitude,event.longitude,8);
   setPlay(false);setElapsed(0);loadObservations();
 }
 
@@ -105,8 +94,6 @@ function setModel(key){
   modelType=key;$('model-select').value=key;
   map.showBaselineWavefront=key==='constant';
   $('velocity-fields').hidden=key!=='constant';
-  $('model-status').textContent=labels[key]+(key==='constant'?'':' · station arrival predictions only');
-  $('wavefront-note').textContent=key==='constant'?'Wavefronts: constant-velocity model':'P/S circles unavailable for this model';
   $('toggle-p').disabled=key!=='constant';$('toggle-s').disabled=key!=='constant';
   refresh();
 }
@@ -124,8 +111,6 @@ function updateReadouts(){
     const v=params[key];$(''+id+'-out').textContent=id==='trigger-count'?String(v):velocity?v.toFixed(1)+' km/s':v.toFixed(1)+' s';
   }
   $('station-count').textContent=results.stations.filter(x=>x.enabled).length+' / '+results.stations.length;
-  $('station-brief').textContent=`${results.stations.filter(x=>x.enabled).length} active · ${params.triggersRequired} required`;
-  $('result-basis').textContent=`${labels[modelType]} · simulated alert delays`;
 }
 
 function updateComparison(){
@@ -138,7 +123,6 @@ function updateComparison(){
     const btn=make('button','model-choice');btn.type='button';btn.dataset.model=item.key;btn.disabled=!item.available;
     btn.classList.toggle('selected',item.key===modelType);btn.setAttribute('aria-pressed',String(item.key===modelType));
     const name=make('span','model-label',item.label);
-    if(item.key===modelType)name.prepend($svg('check'));
     btn.append(name);
     for(const [phase,max] of [['p',maxP],['s',maxS]]){
       const value=make('span','model-value');
@@ -152,13 +136,11 @@ function updateComparison(){
   }
   $('p-mae').textContent=f2(validation?.p.mae);
   $('s-mae').textContent=f2(validation?.s.mae);
-  $('model-brief').textContent=validation?`P ${num(validation.p.mae)} · S ${num(validation.s.mae)}`:'No picks';
 }
 
 function updateTiming(){
   $('issue-main').textContent=f2(results.issue);
   $('delivered-main').textContent=f2(results.delivered);
-  $('timing-brief').textContent=`Delivery ${f1(results.delivered)}`;
   const pieces=timingStages(results,params);
   const strip=$('timing-strip'),explain=$('timing-breakdown');strip.replaceChildren();explain.replaceChildren();
   if(!pieces.length){strip.append(make('div','', 'No alert'));return;}
@@ -188,7 +170,6 @@ function updateStationList(){
     const btn=make('button','station-pick');btn.type='button';btn.setAttribute('aria-label',`Focus station ${station.id}`);
     const left=make('span','station-main');
     left.append(make('span','rank',ranks.get(station.id)||'–'),make('b','',station.code));
-    if(observed?.has(station.id))left.append(make('i','observed-indicator'));
     btn.append(left,make('small','',`${station.p===null?'—':station.p.toFixed(2)+' s'} · ${station.distanceKm.toFixed(1)} km`));
     btn.addEventListener('click',()=>{select('station',station.id);map.focus(station.latitude,station.longitude,9.5);});
     row.append(toggle,btn);root.append(row);
@@ -201,7 +182,7 @@ function updateCityList(){
     const btn=make('button','city-button');btn.type='button';
     btn.classList.toggle('selected',selected.kind==='city'&&selected.id===city.id);
     btn.setAttribute('aria-pressed',String(selected.kind==='city'&&selected.id===city.id));
-    const name=make('span');name.append($svg('location'),make('span','',city.name));
+    const name=make('span','',city.name);
     const lead=make('strong',polarity(city.lead),f2(city.lead));
     btn.append(name,lead);btn.addEventListener('click',()=>select('city',city.id));root.append(btn);
   }
@@ -212,21 +193,21 @@ function updateInspector(){
   const city=results.cities.find(s=>s.id===selected.id);
   const display=$('lead-value');display.classList.remove('negative');
   if(selected.kind==='station'&&station){
-    $('selected-kind').textContent='STATION';$('selected-name').textContent=station.id;
-    $('selected-distance').textContent=station.distanceKm.toFixed(1)+' km from epicenter';
+    $('selected-name').textContent=station.id;
+    $('selected-distance').textContent=station.distanceKm.toFixed(1)+' km';
     $('lead-label').textContent='P arrival';display.textContent=f2(station.p);
-    $('lead-state').textContent=station.enabled?'Enabled':'Disabled';
+
   }else if(selected.kind==='event'){
-    $('selected-kind').textContent='EVENT';$('selected-name').textContent='Ridgecrest';
+    $('selected-name').textContent='Ridgecrest';
     $('selected-distance').textContent=data.event.id;
     $('lead-label').textContent='Alert issue';display.textContent=f2(results.issue);
-    $('lead-state').textContent='Modeled';
+
   }else if(city){
-    $('selected-kind').textContent='CITY';$('selected-name').textContent=city.name;
-    $('selected-distance').textContent=city.distanceKm.toFixed(1)+' km from epicenter';
+    $('selected-name').textContent=city.name;
+    $('selected-distance').textContent=city.distanceKm.toFixed(1)+' km';
     $('lead-label').textContent='S-wave lead';display.textContent=f2(city.lead);
     display.classList.toggle('negative',city.lead!==null&&city.lead<0);
-    $('lead-state').textContent=city.lead===null?'No prediction':'Modeled';
+
   }
 }
 
@@ -234,7 +215,6 @@ function updateValidation(){
   $('p-bias').textContent=f2(validation?.p.bias);
   $('s-bias').textContent=f2(validation?.s.bias);
   $('pick-count').textContent=(validation?.comparisons.length??0)+' picks';
-  $('observed-brief').textContent=validation?`${validation.comparisons.length} picks`:'No picks';
   if(!validation){$('residual-chart').replaceChildren();$('residual-summary').textContent='No observed arrivals';$('pick-rows').replaceChildren();return;}
   const sorted=validation.comparisons.slice().sort((a,b)=>a.id.localeCompare(b.id)||a.phase.localeCompare(b.phase));
   const body=$('pick-rows');body.replaceChildren();
@@ -262,7 +242,7 @@ function renderResidual(){
     bar.style.left=(row.residual<0?50-width:50)+'%';bar.style.width=width+'%';track.append(bar);
     line.append(track,make('span','residual-num '+polarity(row.residual),signed(row.residual).replace(' s','')));root.append(line);
   }
-  $('residual-summary').textContent=`P n=${validation.p.n} · S n=${validation.s.n} · top 10 by |residual| (s)`;
+  $('residual-summary').textContent=`P ${validation.p.n} · S ${validation.s.n}`;
 }
 
 function select(kind,id){
@@ -278,7 +258,7 @@ function setElapsed(t){
 
 function setPlay(value){
   playing=value;$('play').setAttribute('aria-label',value?'Pause':'Play');$('play').title=value?'Pause':'Play';
-  $('play-icon').querySelector('use').setAttribute('href','#ic-'+(value?'pause':'play'));
+  $('play').textContent=value?'Ⅱ':'▶';
 }
 
 function frame(now){

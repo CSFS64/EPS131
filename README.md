@@ -1,4 +1,4 @@
-# EEW Lab V0.4
+# EEW Lab V0.4.1
 
 [Open website](https://csfs64.github.io/EPS131/) · [Methods](docs/methodology.md)
 
@@ -77,3 +77,7 @@ python -m unittest discover -s tests -p 'test_*.py'
 - The alert network uses hypothetical detector, telemetry, processing and user-message latencies. S-wave onset is not a validated damaging-motion threshold.
 
 Source code and static assets use relative paths for migration to another account. Update the source link in `index.html` when moving the project.
+
+## Interface
+
+The interface uses plain bordered controls with immediate hover, selected, and keyboard focus states. Event, Model, and Map remain available at the top. Model accuracy, Alert timing, Stations, and Observed residuals are independent native disclosure panels. Nonessential headings, labels, decorative icons, and model exposition were removed from the page. Scientific assumptions and limitations remain documented in [Methods](docs/methodology.md).
