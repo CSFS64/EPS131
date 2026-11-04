@@ -160,6 +160,7 @@ input[type=range]:hover::-webkit-slider-thumb{background:#dbf0f3}
 :root{font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.4;color:#243841;background:#fff;--text:#243841;--muted:#52646c;--line:#9eb3bb;--line-light:#d1dce0;--teal:#008197;--teal-dark:#00586e;--focus:#004f65}
 button,select,input,summary{transition:none!important;animation:none!important}
 button{font-weight:400}
+button:disabled,select:disabled,input:disabled{opacity:.55}
 a:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible,.layer-control:focus-within{outline:3px solid #00546d;outline-offset:2px;position:relative;z-index:9}
 .topbar{background:#007f92;border-bottom:1px solid #005d70;min-height:60px;gap:10px}
 .topbar a:focus-visible,.topbar button:focus-visible,.topbar select:focus-visible{outline-color:#ffdc70}

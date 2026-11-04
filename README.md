@@ -1,4 +1,4 @@
-# EEW Lab V0.4.4
+# EEW Lab V0.4.5
 
 [Open website](https://csfs64.github.io/EPS131/) · [Methods](docs/methodology.md)
 
@@ -92,4 +92,8 @@ The interface uses Windows system typography, 1px control borders, subtle inset 
 
 ## Interface revision
 
-V0.4.4 uses a flat institutional web-interface treatment, grounded in ALEKS-like selection and government design-system button states. Desktop-style bevels, decorative highlights and press shadows were removed. Distinct default, hover, pressed, selected and keyboard-focus states remain visible. No seismic models or observational data changed.
+V0.4.5 returns to a flat institutional web-app treatment, guided by ALEKS-like clear selection and U.S. government web-interface practices. It removes desktop-style bevels and artificial highlights while retaining distinct default, hover, pressed, selected and keyboard-focus states. Topbar controls, research disclosures, station lists and model comparisons use restrained but purpose-specific borders. No seismic models or observational data were changed.
+
+## Interaction states
+
+The interface follows the supplied ALEKS control references: primary and secondary buttons, grouped map toggles, persistent selections, direct disclosure headers and keyboard-visible focus rings. Pointer hover, press, keyboard focus and selection each have distinct borders or fills. No animations or code annotations are used.
