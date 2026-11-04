@@ -1,94 +1,49 @@
-> Interface update V0.1.1: academic light theme informed by common learning-platform interaction patterns. Physics, data provenance, and model limitations remain identical to V0.1.
+# EEW Lab V0.2
 
-# EEW Lab — V0.1.1
+[Open website](https://csfs64.github.io/EPS131/)
 
-**Earthquake Early Warning Research Lab · Ridgecrest 2019 Historical Replay**
+A lightweight scientific workspace for the 2019 Ridgecrest earthquake. Contains an interactive P/S arrival baseline, 15 real research station coordinates, adjustable station trigger and latency scenarios, and an optional measured-arrival comparison from the Southern California Earthquake Data Center.
 
-An interactive, browser-based teaching/research baseline for 2019 Ridgecrest earthquake travel-time simulations. The app loads one reviewed USGS historical event, 15 **real geolocated broadband station sites from an NCEDC research subset**, and displays theoretical P/S surface arrival fronts, station P-wave timing, a configurable illustrative trigger/latency chain, and lead-time estimates for six city centers. It is **not** an operational ShakeAlert reconstruction, a damaging shaking model, or a live warning service.
+## Run
 
-## Run on Windows
+From the project root, run `py -m http.server 8000`, then open `http://localhost:8000/`. Alternatively, double-click `start_windows.bat` on Windows.
 
-1. Extract this ZIP (all files should be directly inside the `EEW-Lab-v0.1` directory, not inside a second nested folder).
-2. Double-click `start_windows.bat` **or** open PowerShell in the extracted folder.
-3. If using PowerShell, run:
+- **Propagation:** change assumed constant P/S velocities and show surface wavefronts.
+- **Stations:** enable, disable and inspect the 15 NCEDC station sites.
+- **Validation:** see phase-specific MAE, bias and station residuals when real SCEDC picks have been loaded. Import `.phase` or `.json` files here.
+- **Latency:** change the hypothetical trigger count, station detection and delivery delays; export CSV.
+- **Basemap:** Satellite / Street / Grid. Satellite uses Esri World Imagery, with attribution on the map. The Grid mode works offline.
+- **Playback:** play/pause, restart, scrub, change speed, or use Space when focus is outside controls.
 
-   ```powershell
-   py -m http.server 8000
-   ```
+## Observed data
 
-4. Open http://localhost:8000/ in the browser. (The `.bat` file also prints this address.)
+The SCEDC source archive is `s3://scedc-pds/event_phases/2019/2019_187/38457511.phase` (STP format).
 
-The website **does not require npm, Python packages or a backend**. Python is only used to start a small local static HTTP server. The event/station data and scientific calculations work offline. For an online basemap, your browser needs access to OpenStreetMap raster tiles; uncheck **Street basemap (online)** to use the built-in coordinate grid offline.
+To download and process real observations locally:
 
-## Interactions
-
-- ▶ Play / pause; timeline scrubber; time speed selector; `Space` to play/pause (when a form control is not focused)
-- Drag map to pan; mouse wheel or +/- to zoom; recenter control
-- Toggle P/S waves and station/basemap layers
-- Click a station or city to inspect theoretical arrivals and simulated warning timeline
-- Enable/disable stations individually in **Station network**
-- Vary trigger count, detection delay, network latency, processing delay and delivery latency in **Experiments**
-- Export event/city/station calculations and scenario parameters as CSV
-- **Method & sources** clearly separates verified data from modeled assumptions
-
-## Run unit tests (optional)
-
-```powershell
-node --test tests/physics.test.mjs
+```sh
+python pipeline/fetch_phases.py
 ```
 
-Node 18+ is required for tests only, not to use the website.
+The resulting `data/observations.json` is loaded automatically by the site. The script can also process a locally downloaded source using `python pipeline/fetch_phases.py --input local.phase`. GitHub Actions has a manual and push-triggered workflow to retrieve and commit the observed data from the public archive. If downloading fails, the application shows *No observations loaded*; it does not invent reference picks.
 
-## Host on GitHub Pages
+## Check
 
-This site uses only **relative asset paths**, so you can move it between accounts/repositories without changing source code.
-
-1. Create a new, otherwise empty public repository (for example `eew-lab-test`).
-2. Upload the **contents** of this folder to the repository root, including `index.html`, `css/`, `js/`, `data/`, `docs/`, `pipeline/`, `tests/`.
-3. In repo **Settings → Pages**, select **Deploy from a branch**, `main`, `/(root)`, **Save**.
-4. The project will normally be served at `https://ACCOUNT.github.io/REPOSITORY/`. To remove the account from the visible URL, attach a custom domain, or publish from a separate GitHub account.
-
-GitHub public repositories are browsable and reveal their owner. A custom domain hides the username in the URL but does not make the public code anonymous. Other repos remain private only if their visibility is Private.
-
-## Project structure
-
-```text
-index.html              website
-css/style.css           styles
-js/app.js               UI, playback, controls, export
-js/map.js               canvas tile map and wavefront rendering
-js/physics.js           travel-time and alert-chain functions
-\ndata/ridgecrest-2019.json    verified event/station locations + clearly marked assumptions
-pipeline/refresh_sources.py  optional USGS source data downloader
-samples: none fabricated
-\ndocs/methodology.md     formulae, sources, limitations
-\ntests/physics.test.mjs  automated checks
+```sh
+node --test tests/*.test.mjs
+python -m unittest discover -s tests -p 'test_*.py'
 ```
 
-## What comes later?
+## Repo layout
 
-- V0.2: observed SCEDC phase pick comparisons, model error metrics, reproducible multi-event tests
-- V0.3: 1D TauP layered velocities and measured/sourced latency distributions
-- V1.0: 3D SCEC UCVM travel-time maps, uncertainty and rigorously defined population exposure
+- `index.html`, `css/style.css`, `js/app.js`, `js/map.js`: interface and interaction
+- `js/physics.js`, `js/observations.js`: calculations and validation
+- `data/ridgecrest-2019.json`: historical source and illustrative model parameters
+- `data/observations.json`: generated only after successfully obtaining SCEDC observations
+- `pipeline/fetch_phases.py`: reproducible ingestion
+- `docs/methodology.md`: scientific definitions, data provenance and limitations
+- `.github/workflows/scedc-phases.yml`: automate optional observation refresh
 
-Do **not** infer that station coordinates mean live network connectivity or that theoretical S-wave arrival means damaging shaking.
+This site is a research demonstration, not a live warning service or a reconstruction of the operational ShakeAlert network. Avoid using simulated S arrivals as a proxy for damaging shaking.
 
-### 中文快速说明
-
-解压后进入文件夹，打开 PowerShell，运行 `py -m http.server 8000`，浏览器访问 `http://localhost:8000/`。这是可交互、可打包转移到其他 GitHub 账号的静态网站。内置 USGS 真实地震参数与 NCEDC 研究用真实台站坐标，但波速和延迟是演示用假设参数，**不是**实际 ShakeAlert 系统历史性能。点击左侧 `Experiments` 可以改变台站数和延迟，右下侧可以看到预警时间变化；GitHub Pages 可以直接托管。
-
-## V0.1.1 interface update (4 November 2026)
-
-- Academic light-theme research workspace inspired by conventional learning-platform interaction patterns (teal header, structured controls, progress markers and calm data cards); not affiliated with or using ALEKS assets.
-- Reworked map, results and playback styling for clear separation of **historical source facts** from **modeled results**.
-- Recolored the canvas wavefronts and station markers for legibility on a light map.
-- Numerical baseline and all scientific limitations are unchanged from V0.1.
-
-### GitHub Pages deployment
-
-1. Create or authorize an empty repository. Copy the **contents of this folder** to the root of the repository (do not nest under another EEW-Lab folder).
-2. Go to repository **Settings → Pages** and select **Deploy from a branch** → **main** → **/(root)**, then save.
-3. Once GitHub reports the site as published, open the Pages URL shown in Settings.
-4. The site uses relative paths and can later be moved to a different account without changing the application paths. Replace the source-code link in `index.html` if you move accounts.
-
-This is a research/teaching demonstration and not a live public safety application. The website does not use ALEKS design assets, trademarks or source code.
+The project uses relative file paths and can be copied into a different GitHub Pages repository. If you change GitHub accounts, update the source-code link in `index.html`.

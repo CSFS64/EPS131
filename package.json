@@ -1,8 +1,9 @@
 {
-  "name": "eew-lab-v01",
-  "version": "0.1.0",
-  "private": true,
+  "name": "eew-lab",
+  "version": "0.2.0",
   "type": "module",
-  "scripts": {"test": "node --test tests/*.test.mjs"},
-  "description": "Self-contained historical earthquake early warning research simulator"
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  }
 }

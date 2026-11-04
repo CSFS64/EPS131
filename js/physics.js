@@ -1,4 +1,3 @@
-// No network dependencies. Pure functions also used by Node's test runner.
 export const EARTH_RADIUS_KM = 6371.0088;
 export const DEG = Math.PI / 180;
 export const RAD = 180 / Math.PI;
@@ -46,7 +45,7 @@ export function calculateNetwork(data, params, disabled = new Set()) {
     return {...city, p, s, distanceKm: haversineKm(event.latitude, event.longitude, city.latitude, city.longitude),
       lead: delivered === null ? null : s - delivered};
   });
-  return {stations, issue, delivered, cities, triggered: triggers.length, kthStation: kth ?? null,
+  return {stations, issue, delivered, cities, params, triggered: triggers.length, kthStation: kth ?? null,
     firstStation: triggers[0] ?? null};
 }
 export function fmtSeconds(s) { return s === null || !Number.isFinite(s) ? '—' : `${s.toFixed(1)} s`; }

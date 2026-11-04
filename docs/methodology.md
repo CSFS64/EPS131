@@ -1,53 +1,46 @@
-# EEW Lab V0.1 — Model and validation status
+# EEW Lab V0.2 — Methods
 
-## Implemented
+## Event and stations
 
-The Ridgecrest source is the USGS preferred reviewed event `ci38457511`:
-- Time: 2019-07-06T03:19:53 UTC
-- Magnitude: Mw 7.1
-- Hypocenter: latitude 35.770, longitude -117.599, depth 8.0 km
+- USGS catalog event `ci38457511`, 2019-07-06 03:19:53 UTC, Mw 7.1, depth 8.0 km, 35.770°N, 117.599°W.
+- Station subset: 15 CI broadband station coordinates used in a Ridgecrest study published by NCEDC. This subset is not a historical ShakeAlert operational station inventory.
+- City points: approximate geographic centers, not census-weighted population estimates.
 
-Station coordinates come from an NCEDC historical Ridgecrest eGF mapping research subset (15 CI broadband sites). The subset is not an inventory of active ShakeAlert stations at the earthquake origin time. Individual network/telemetry status is unknown. City coordinates are approximate geographic city centers.
+## Baseline propagation
 
-V0.1 uses a **point source** and a **constant-velocity straight-ray** model:
+V0.2 retains a single point hypocenter with straight rays and spatially constant crustal P and S wave speeds. The geodesic distance is approximated with the haversine great-circle distance. The hypocentral range is `R = sqrt(d_surface² + depth²)`. Predicted phase arrival is `R / velocity`. A surface wavefront at elapsed time `t` is only shown for `v * t >= depth`; its horizontal radius is `sqrt((v*t)² - depth²)`.
 
-- Surface epicentral distance: `d = great_circle_distance(epicenter, receiver)` [km]
-- Hypocentral straight-ray distance: `R = sqrt(d^2 + depth^2)` [km]
-- Arrival times: `t_P = R / Vp` and `t_S = R / Vs`
-- Surface wavefront radius: `r(t) = sqrt((v*t)^2 - depth^2)` for `v*t >= depth`, otherwise no surface arrival yet
+Defaults are `Vp = 6.0 km/s`, `Vs = 3.5 km/s`, both illustrative. Sliders change these assumptions; they are not fitted measurements of Ridgecrest's crustal velocity. V0.2 does not include layered velocity structure, 3D heterogeneity or finite-fault rupture.
 
-The path uses Earth-surface great-circle distance plus vertical depth, an approximation. The true 3D ray path, topography, spherical geometry and velocity heterogeneity are not modeled.
+## Station alert model
 
-**Illustrative** speeds `Vp = 6.0 km/s`, `Vs = 3.5 km/s`. They are not measured from 2019 records.
+For each enabled station `i`, `available_i = P_i + detection_delay + telemetry_delay`. The alarm issue time is the time of the *k*th earliest available station plus processing delay. User receipt time adds delivery delay. A city lead time is predicted first S-arrival minus simulated user receipt. The algorithm is an intentionally simplified hypothetical trigger chain, not a reimplementation of ShakeAlert. No actual historical alarm or phone alert times are incorporated.
 
-For each **enabled** station:
+## Observed phase validation
 
-`available_i = P_arrival_i + detection_delay + station_network_delay`
+SCEDC publishes Ridgecrest 2019 phase picks in a publicly hosted STP text file. The optional local pipeline fetches the exact file, selects matching CI station codes, takes the earliest nonnegative P and S pick on the available channels (within 300 seconds), and converts time-after-SCEDC-origin to time-after-the-referenced-USGS-origin. The original origin timestamps and their difference are stored for provenance.
 
-`issue = kth_smallest(available_i) + processing_delay`
+On the website, residual is `predicted - observed`; therefore positive residual means the model arrival is later than the observed pick. `MAE = mean(|residual|)`, `bias = mean(residual)`, and `RMSE = sqrt(mean(residual²))`. Counts are phase-specific; only stations with actual picks are included. A missing archive is represented as *no observed data*, never as an inferred or filled-in value. Users can import a raw `.phase` or generated `.json` file.
 
-`delivered = issue + user_delivery_delay`
+Observed phase picks may correspond to different station channels or phases with varying onset quality. Selecting the earliest pick is a documented simple rule; further work should incorporate quality flags, channel selection, station metadata and uncertainty. A mismatch between SCEDC and USGS origins is explicitly corrected, but differences in hypocenter, event magnitude or station elevation still affect residuals. Results cannot be interpreted as purely velocity-model error.
 
-`lead_city = S_arrival_city - delivered`
+## Map imagery
 
-The number of stations `k` and all delays are adjustable illustrative parameters, not a reproduction of the proprietary/operational ShakeAlert algorithm. No magnitude-estimation logic, false-alarm logic, finite fault, actual station health, route-specific notification delivery or ground shaking threshold is represented. When enabled stations < k, issue/delivery/lead are unavailable, not zero.
+Three map modes are supported: Esri World Imagery (satellite/aerial), OpenStreetMap tiles, and an offline WGS84 coordinate grid. Tile imagery is external content and subject to its publisher's access conditions. Source credits are shown in the map and no imagery is included in the project repository.
 
-**Important:** S-wave first arrival is not the same as damaging ground motion onset, peak acceleration or maximum shaking. A positive lead does not mean a location would experience damaging shaking, receive an actual alert, or have enough actionable time to respond.
+## Verification and limits
 
-## Intended subsequent validation
+Node unit tests cover distance geometry, wavefront formation, trigger ordering, no-alarm cases, latency monotonicity, STP parsing, origin alignment and signed residual statistics. Python unit tests independently check text pick parsing.
 
-1. Download observed event phase picks and compare baseline theoretical P/S times to picks (MAE/bias per station).
-2. Add 1D layered TauP predictions and time-aligned model comparison.
-3. Add 3D UCVM-based first-arrival travel-time grids; test convergence and surface/receiver treatment.
-4. For actual warning performance, gather archival system messages and independently measured delivery latencies, not assumed constants.
-5. Add shakemap / population exposure only after clearly distinguishing post-event maps from information available to the warning algorithm.
+Positive simulated lead time does not establish that an actual alert was delivered, that damaging shaking occurred, or that actionable warning time was available. S-wave onset is not synonymous with threshold ground motion. This is a historical teaching/research baseline rather than an operational EEW service.
 
 ## Sources
 
-- USGS event: https://earthquake.usgs.gov/earthquakes/eventpage/ci38457511/origin/magnitude
-- NCEDC 15-station study: https://ncedc.org/ftp/outgoing/taira/RC/RC_seismicity_map.html
-- NCEDC station file: https://ncedc.org/ftp/outgoing/taira/RC/ci_bb_sta.txt
-- Optional raw USGS query: https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=ci38457511
-- OpenStreetMap tile license/attribution: https://www.openstreetmap.org/copyright
-
-All calculations are in `js/physics.js`, with reproducible tests in `tests/physics.test.mjs`.
+- USGS Ridgecrest event: https://earthquake.usgs.gov/earthquakes/eventpage/ci38457511
+- NCEDC Ridgecrest research station set: https://ncedc.org/ftp/outgoing/taira/RC/RC_seismicity_map.html
+- NCEDC station coordinates: https://ncedc.org/ftp/outgoing/taira/RC/ci_bb_sta.txt
+- SCEDC public phase archive: https://scedc-pds.s3.us-west-2.amazonaws.com/event_phases/2019/2019_187/38457511.phase
+- SCEDC STP manual: https://scedc.caltech.edu/research-tools/stp/STP_Manual_v1.01.pdf
+- SCEDC dataset citation: https://doi.org/10.7909/C3WD3xH1
+- Esri attribution: https://support.esri.com/en-us/knowledge-base/what-is-the-correct-way-to-cite-an-arcgis-online-basema-000012040
+- OpenStreetMap attribution: https://www.openstreetmap.org/copyright
