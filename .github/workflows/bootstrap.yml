@@ -1,9 +1,8 @@
-name: One-time import EEW Lab source
+name: Import EEW Lab source (one-time)
 on:
   push:
     paths:
-      - 'eew-source.tgz'
-  workflow_dispatch:
+      - '.eewparts/part-06.txt'
 permissions:
   contents: write
 jobs:
@@ -11,16 +10,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Extract EEW Lab
+      - name: Unpack validated full source
+        shell: bash
         run: |
-          tar -xzf eew-source.tgz
-          rm eew-source.tgz
-          rm .github/workflows/bootstrap.yml
+          cat .eewparts/part-{01..06}.txt | base64 --decode > /tmp/eew-source.tar.xz
+          echo '5b8929aeb3adcdee9111e09882060f7265f5b9c77baa052468cc935be1970768  /tmp/eew-source.tar.xz' | sha256sum --check
+          tar -xJf /tmp/eew-source.tar.xz
           node --test tests/physics.test.mjs
-      - name: Commit full source
+          rm -rf .eewparts
+          rm -f .github/workflows/bootstrap.yml
+      - name: Commit imported source
+        shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
-          git commit -m 'Import complete EEW Lab V0.1.1 source'
+          git commit -m 'Import full EEW Lab v0.1.1 source'
           git push
