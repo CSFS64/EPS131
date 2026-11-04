@@ -19,7 +19,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install --disable-pip-version-check obspy==1.4.2
+      - run: python -m pip install --disable-pip-version-check setuptools==80.9.0 obspy==1.4.2
       - run: python pipeline/fetch_events_phases.py
       - run: python pipeline/build_1d.py
       - run: |
