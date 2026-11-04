@@ -1,122 +1,93 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#008397" />
-  <meta name="description" content="EEW Lab: interactive research-grade teaching baseline for earthquake wave arrivals and simulated warning timelines." />
-  <title>EEW Lab — Historical Earthquake Warning Simulation</title>
-  <link rel="stylesheet" href="./css/style.css" />
-  <link rel="stylesheet" href="./css/academic.css" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#087f90">
+<title>EEW Lab | Ridgecrest 2019</title>
+<link rel="stylesheet" href="./css/style.css">
 </head>
 <body>
-  <div class="app-shell">
+<div class="app-shell">
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="EEW Lab home">EEW <span>LAB</span></a>
+    <span class="bar-separator"></span>
+    <span class="project-title">Ridgecrest 2019</span>
+    <span class="event-tag">Mw 7.1</span>
+    <div class="top-actions"><span id="load-state" class="load-state">Loading</span><a class="source-link" href="https://github.com/CSFS64/EPS131" target="_blank" rel="noopener">Source ↗</a></div>
+  </header>
+  <div class="main-grid">
     <aside class="sidebar">
-      <header class="brand">
-        <div class="brand-icon"><span class="seis-icon">≋</span></div>
-        <div><div class="brand-name">EEW<span> LAB</span></div><div class="brand-subtitle">SEISMIC HAZARDS RESEARCH</div></div>
-        <span class="version-tag">V0.1.1</span>
-      </header>
-      <div class="sidebar-scroll">
-        <div class="section-eyebrow">HISTORICAL CASE STUDY</div>
-        <div class="event-card">
-          <div class="event-card-top"><span class="source-pill"><span class="dot green"></span> USGS VERIFIED ORIGIN</span><span class="date-label">JUL 2019</span></div>
-          <div class="event-main"><div class="magnitude"><span>M</span>7.1</div><div><strong>Ridgecrest Sequence</strong><small>Southern California, United States</small></div></div>
-          <div class="event-detail-row"><span>Origin (UTC)</span><strong>06 JUL · 03:19:53</strong></div>
-          <div class="event-detail-row"><span>Hypocentral depth</span><strong>8.0 km</strong></div>
-          <div class="event-detail-row"><span>USGS ID</span><a href="https://earthquake.usgs.gov/earthquakes/eventpage/ci38457511" target="_blank" rel="noopener noreferrer">ci38457511 ↗</a></div>
-        </div>
-        <div class="section-eyebrow section-space">RESEARCH MODULES</div>
-        <div class="tab-group" role="tablist" aria-label="Workspaces">
-          <button type="button" class="side-tab active" data-panel="simulate" role="tab" aria-selected="true"><span class="tab-icon">01</span><span>Simulation</span></button>
-          <button type="button" class="side-tab" data-panel="network" role="tab" aria-selected="false"><span class="tab-icon">02</span><span>Station network</span><span class="tab-count">15</span></button>
-          <button type="button" class="side-tab" data-panel="experiment" role="tab" aria-selected="false"><span class="tab-icon">03</span><span>Experiments</span></button>
-          <button type="button" class="side-tab" data-panel="methods" role="tab" aria-selected="false"><span class="tab-icon">04</span><span>Method & sources</span></button>
-        </div>
-        <section id="panel-simulate" class="panel-content active" role="tabpanel">
-          <div class="section-eyebrow section-space">PROPAGATION MODEL</div>
-          <div class="model-card">
-            <div class="model-type"><div class="model-badge">01</div><div><strong>Constant-velocity baseline</strong><small>3D straight-ray distance</small></div></div>
-            <div class="two-columns">
-              <div class="speed-stat"><small>P WAVE</small><strong id="vp-readout">6.0 <span>km/s</span></strong></div>
-              <div class="speed-stat"><small>S WAVE</small><strong id="vs-readout">3.5 <span>km/s</span></strong></div>
-            </div>
-            <div class="tip-note">Illustrative velocities — not observed 3D wave speeds. The 1D and 3D models are planned for later versions.</div>
-          </div>
-          <div class="section-eyebrow section-space">MAP LAYERS</div>
-          <label class="switch-row"><span><i class="legend-line blue"></i> P-wavefront</span><input id="toggle-p" type="checkbox" checked /></label>
-          <label class="switch-row"><span><i class="legend-line amber"></i> S-wavefront</span><input id="toggle-s" type="checkbox" checked /></label>
-          <label class="switch-row"><span><i class="legend-square"></i> Stations & labels</span><input id="toggle-stations" type="checkbox" checked /></label>
-          <label class="switch-row"><span><i class="legend-square faint"></i> Street basemap (online)</span><input id="toggle-tiles" type="checkbox" checked /></label>
+      <div class="tabs" role="tablist" aria-label="Analysis tools">
+        <button class="tab selected" id="tab-simulation" data-panel="simulation" role="tab" aria-controls="panel-simulation" aria-selected="true">Propagation</button>
+        <button class="tab" id="tab-stations" data-panel="stations" role="tab" aria-controls="panel-stations" aria-selected="false">Stations</button>
+        <button class="tab" id="tab-validation" data-panel="validation" role="tab" aria-controls="panel-validation" aria-selected="false">Validation</button>
+        <button class="tab" id="tab-latency" data-panel="latency" role="tab" aria-controls="panel-latency" aria-selected="false">Latency</button>
+      </div>
+      <div class="side-scroll">
+        <section id="panel-simulation" class="side-panel active" role="tabpanel" aria-labelledby="tab-simulation">
+          <div class="section-label">SOURCE</div>
+          <div class="stat-grid"><div><small>Origin UTC</small><b>06 Jul 2019 03:19:53</b></div><div><small>Depth</small><b>8.0 km</b></div></div>
+          <div class="section-label">VELOCITY MODEL</div>
+          <div class="readout-row"><span>Constant velocity</span><strong>Baseline</strong></div>
+          <div class="slider-field"><div class="field-head"><label for="vp">P velocity</label><output id="vp-out">6.0 km/s</output></div><input id="vp" type="range" min="4.5" max="7.5" step="0.1" value="6"></div>
+          <div class="slider-field"><div class="field-head"><label for="vs">S velocity</label><output id="vs-out">3.5 km/s</output></div><input id="vs" type="range" min="2.5" max="4.5" step="0.1" value="3.5"></div>
+          <div class="section-label">LAYERS</div>
+          <label class="toggle-line"><span><i class="line-swatch p"></i>P wave</span><input id="toggle-p" type="checkbox" checked></label>
+          <label class="toggle-line"><span><i class="line-swatch s"></i>S wave</span><input id="toggle-s" type="checkbox" checked></label>
+          <label class="toggle-line"><span><i class="dot-swatch"></i>Stations</span><input id="toggle-stations" type="checkbox" checked></label>
+          <button class="simple-button reset-button" id="reset-velocities">Reset velocities</button>
         </section>
-        <section id="panel-network" class="panel-content" role="tabpanel">
-          <div class="section-eyebrow section-space">RESEARCH STATION SUBSET</div>
-          <p class="muted-note">15 real CI broadband sites from an NCEDC Ridgecrest study. These are <strong>not</strong> a reconstruction of the actual 2019 ShakeAlert operational network.</p>
-          <div class="network-tools"><button type="button" id="enable-all" class="outline-button">Enable all</button><button type="button" id="disable-all" class="outline-button">Disable all</button></div>
-          <div class="station-list" id="station-list"></div>
+        <section id="panel-stations" class="side-panel" role="tabpanel" aria-labelledby="tab-stations" hidden>
+          <div class="row-between section-head"><span class="section-label no-margin">STATION SUBSET</span><b id="station-count">15 / 15</b></div>
+          <div class="button-group"><button class="simple-button" id="enable-all">All on</button><button class="simple-button" id="disable-all">All off</button></div>
+          <div id="station-list" class="station-list"></div>
         </section>
-        <section id="panel-experiment" class="panel-content" role="tabpanel">
-          <div class="section-eyebrow section-space">DETECTION & DELIVERY</div>
-          <p class="muted-note">Adjust hypothetical processing assumptions. Parameters are not historical measured ShakeAlert latencies.</p>
-          <div class="control-group"><div class="control-label"><label for="trigger-count">Required stations</label><strong id="trigger-count-val">4</strong></div><input id="trigger-count" type="range" min="1" max="12" step="1" value="4" /><div class="range-endpoints"><span>1</span><span>12</span></div></div>
-          <div class="control-group"><div class="control-label"><label for="detect-delay">P-pick / detection</label><strong id="detect-delay-val">0.8 s</strong></div><input id="detect-delay" type="range" min="0" max="6" step="0.2" value="0.8" /></div>
-          <div class="control-group"><div class="control-label"><label for="network-delay">Station network latency</label><strong id="network-delay-val">1.0 s</strong></div><input id="network-delay" type="range" min="0" max="12" step="0.2" value="1" /></div>
-          <div class="control-group"><div class="control-label"><label for="process-delay">Algorithm processing</label><strong id="process-delay-val">1.2 s</strong></div><input id="process-delay" type="range" min="0" max="10" step="0.2" value="1.2" /></div>
-          <div class="control-group"><div class="control-label"><label for="delivery-delay">User delivery latency</label><strong id="delivery-delay-val">3.0 s</strong></div><input id="delivery-delay" type="range" min="0" max="20" step="0.2" value="3" /></div>
-          <button type="button" class="outline-button full" id="reset-experiment">Reset parameters</button>
-          <button type="button" class="outline-button full secondary-btn" id="export-results">Export results CSV</button>
+        <section id="panel-validation" class="side-panel" role="tabpanel" aria-labelledby="tab-validation" hidden>
+          <div class="row-between section-head"><span class="section-label no-margin">SCEDC PHASE PICKS</span><span id="pick-count">0 picks</span></div>
+          <div id="validation-status" class="data-status">No observations loaded</div>
+          <div class="stat-grid validation-stats"><div><small>P MAE</small><b id="p-mae">—</b></div><div><small>S MAE</small><b id="s-mae">—</b></div><div><small>P bias</small><b id="p-bias">—</b></div><div><small>S bias</small><b id="s-bias">—</b></div></div>
+          <div class="section-label">IMPORT</div>
+          <label for="phase-file" class="file-button">Select .phase or .json file</label><input type="file" id="phase-file" accept=".phase,.txt,.json,text/plain,application/json" hidden>
+          <div class="file-name" id="import-state">—</div>
+          <a class="external-row" href="https://d2t2xxda3aznuq.cloudfront.net/data/cloud.html" target="_blank" rel="noopener">SCEDC data archive ↗</a>
+          <div class="section-label">PICK COMPARISON</div>
+          <div class="data-table-scroll"><table class="compact-table" aria-label="Observed and modeled arrivals"><thead><tr><th>Station</th><th>Phase</th><th>Δt</th></tr></thead><tbody id="pick-rows"><tr><td colspan="3">No data</td></tr></tbody></table></div>
         </section>
-        <section id="panel-methods" class="panel-content" role="tabpanel">
-          <div class="section-eyebrow section-space">SCIENTIFIC STATUS</div>
-          <p class="muted-note">This is a historical educational <strong>point-source approximation</strong>. Not a prediction, ShakeAlert implementation, ground-motion model, nor a live public-safety service.</p>
-          <div class="method-item"><strong>Real observations used</strong><p>USGS reviewed 2019 event origin; NCEDC study station coordinates.</p></div>
-          <div class="method-item"><strong>Simulated values</strong><p>Travel times, station availability, algorithm issue time, user delivery time and city lead times.</p></div>
-          <div class="method-item"><strong>Future validation</strong><p>Observed P/S arrival picks; 1D TauP; SCEC 3D UCVM; ShakeAlert historical reports.</p></div>
-          <a class="method-link" target="_blank" rel="noopener noreferrer" href="https://ncedc.org/ftp/outgoing/taira/RC/RC_seismicity_map.html">NCEDC station coordinates ↗</a>
-          <a class="method-link" target="_blank" rel="noopener noreferrer" href="https://earthquake.usgs.gov/earthquakes/eventpage/ci38457511">USGS event record ↗</a>
-          <p class="muted-note">Source URLs and model limitations are also recorded in the included README and JSON data file.</p>
+        <section id="panel-latency" class="side-panel" role="tabpanel" aria-labelledby="tab-latency" hidden>
+          <div class="section-label">TRIGGER</div>
+          <div class="slider-field"><div class="field-head"><label for="trigger-count">Stations required</label><output id="trigger-count-out">4</output></div><input id="trigger-count" type="range" min="1" max="15" step="1" value="4"></div>
+          <div class="section-label">DELAYS</div>
+          <div class="slider-field"><div class="field-head"><label for="detect-delay">Detection</label><output id="detect-delay-out">0.8 s</output></div><input id="detect-delay" type="range" min="0" max="6" step="0.2" value="0.8"></div>
+          <div class="slider-field"><div class="field-head"><label for="network-delay">Station telemetry</label><output id="network-delay-out">1.0 s</output></div><input id="network-delay" type="range" min="0" max="12" step="0.2" value="1"></div>
+          <div class="slider-field"><div class="field-head"><label for="process-delay">Processing</label><output id="process-delay-out">1.2 s</output></div><input id="process-delay" type="range" min="0" max="10" step="0.2" value="1.2"></div>
+          <div class="slider-field"><div class="field-head"><label for="delivery-delay">User delivery</label><output id="delivery-delay-out">3.0 s</output></div><input id="delivery-delay" type="range" min="0" max="20" step="0.2" value="3"></div>
+          <div class="button-group buttons-spaced"><button class="simple-button" id="reset-latency">Reset</button><button class="simple-button primary" id="export-results">Export CSV</button></div>
         </section>
       </div>
-      <footer class="sidebar-footer"><span class="footer-dot"></span> REPRODUCIBLE RESEARCH DEMO <span class="footer-right">OFFLINE DATA</span></footer>
+      <div class="sidebar-footer"><a href="./docs/methodology.md" target="_blank">Methods ↗</a><span>V0.2</span></div>
     </aside>
     <main class="workspace">
-      <header class="topbar">
-        <div class="top-left"><span class="crumb">EPS 131</span><span class="crumb-divider">/</span><strong>Ridgecrest 2019</strong><span class="mode-label">HISTORICAL REPLAY</span></div>
-        <div class="top-right"><span class="status-light"></span><span id="load-state">Loading dataset…</span><a class="top-link" target="_blank" rel="noopener noreferrer" href="https://github.com/CSFS64/EPS131">SOURCE ↗</a></div>
-      </header>
-      <div class="map-workspace">
-        <canvas id="map" aria-label="Interactive earthquake event, P and S wavefronts, and seismic stations"></canvas>
-        <div class="map-top-left">
-          <div class="live-pill"><span class="pulse-dot"></span> MODELLED · HISTORICAL CASE</div>
-          <div class="map-title">Seismic wave propagation</div>
-          <div class="map-subtitle">Ridgecrest M7.1 · Point source · Constant velocities</div>
-        </div>
-        <div class="map-left-bottom"><div class="map-legend"><span><i class="line-icon pw"></i> P arrival</span><span><i class="line-icon sw"></i> S arrival</span><span><i class="square-icon"></i> Seismic station</span></div></div>
-        <div class="map-controls"><button type="button" id="zoom-in" title="Zoom in">+</button><button type="button" id="zoom-out" title="Zoom out">−</button><button type="button" id="recenter" title="Recenter">⌖</button></div>
-        <div class="map-attribution">Map tiles © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> · Data: USGS, NCEDC</div>
-      </div>
-      <aside class="inspector">
-        <div class="inspector-top"><div><span class="section-eyebrow">RESULTS & ANALYSIS</span><h2 id="inspector-title">Ridgecrest</h2><p id="inspector-subtitle">Selected location</p></div><span class="inspect-icon">⌖</span></div>
-        <div class="summary-lead"><div class="section-eyebrow">SIMULATED S-WAVE LEAD TIME</div><div class="lead-value" id="lead-value">— <span>s</span></div><div class="lead-description" id="lead-description">Loading calculations</div></div>
-        <div class="timeline-mini" id="timeline-mini"></div>
-        <div class="mini-section-title">SYSTEM TIMING</div>
-        <div class="status-table" id="system-times"></div>
-        <div class="inspector-separator"></div>
-        <div class="mini-section-title">CITY LOCATIONS</div>
-        <div class="city-list" id="city-list"></div>
-        <p class="inspector-disclaimer">Lead time is relative to theoretical first S-wave arrival — <strong>not</strong> damaging shaking onset. Historical warning performance is not reproduced in V0.1.</p>
+      <section class="map-stage" aria-label="Seismic propagation map">
+        <canvas id="map" aria-label="Map of wavefronts and seismic stations"></canvas>
+        <div class="map-toolbar" role="group" aria-label="Basemap selection"><button class="map-mode selected" data-base="satellite" aria-pressed="true">Satellite</button><button class="map-mode" data-base="street" aria-pressed="false">Street</button><button class="map-mode" data-base="grid" aria-pressed="false">Grid</button></div>
+        <div class="map-zoom"><button id="zoom-in" title="Zoom in" aria-label="Zoom in">+</button><button id="zoom-out" title="Zoom out" aria-label="Zoom out">−</button><button id="recenter" title="Reset view" aria-label="Reset map">⌖</button></div>
+        <div class="map-legend"><span><i class="line-swatch p"></i>P</span><span><i class="line-swatch s"></i>S</span><span><i class="dot-swatch"></i>Stations</span></div>
+        <div class="map-attribution" id="map-attribution">Imagery © Esri, Maxar, Earthstar Geographics, GIS User Community</div>
+      </section>
+      <aside class="results">
+        <div class="results-top"><small id="selected-kind">CITY</small><h1 id="selected-name">Ridgecrest</h1><span id="selected-distance">—</span></div>
+        <div class="lead-panel"><div id="lead-label">S-wave lead</div><div class="lead-value" id="lead-value">—</div><span id="lead-state">Modeled</span></div>
+        <div class="section-label inside">SYSTEM TIMING</div><div class="metric-rows" id="system-times"></div>
+        <div class="section-label inside">CITIES</div><div class="city-list" id="city-list"></div>
+        <div class="validation-drawer" id="validation-drawer" hidden><div class="section-label inside">ARRIVAL RESIDUALS · PREDICTED − OBSERVED</div><canvas id="residual-chart" height="160" aria-label="Arrival time error chart"></canvas><div class="chart-meta" id="residual-summary">—</div></div>
+        <div class="results-foot" id="result-basis">Model · constant Vp / Vs</div>
       </aside>
-      <footer class="playback">
-        <div class="playback-left">
-          <button type="button" class="play-button" id="play" aria-label="Play / pause">▶</button>
-          <button type="button" class="ghost-button" id="restart" title="Restart">↺</button>
-          <div class="time-readout"><div class="section-eyebrow">TIME SINCE ORIGIN</div><strong id="time-readout">00:00.0</strong></div>
-        </div>
-        <div class="scrub-group"><div class="scrub-head"><span>ORIGIN · t = 0</span><span id="duration-readout">120 SEC</span></div><input type="range" id="scrubber" min="0" max="120" step="0.1" value="0" aria-label="Timeline in seconds" /><div class="scrub-labels"><span>P-wave / S-wave</span><span>Station detection</span><span>User delivery</span></div></div>
-        <div class="playback-right"><label for="speed">SPEED</label><select id="speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select></div>
-      </footer>
+      <footer class="playback"><div class="play-buttons"><button class="play-button" id="play" aria-label="Play">▶</button><button class="play-secondary" id="restart" aria-label="Restart">↺</button></div><div class="timer"><small>ELAPSED</small><b id="time-readout">00:00.0</b></div><div class="timeline"><input id="scrubber" type="range" min="0" max="120" step="0.1" value="0" aria-label="Simulation time"><div class="timeline-ends"><span>t = 0</span><span id="duration-readout">120 s</span></div></div><div class="speed-box"><label for="speed">SPEED</label><select id="speed"><option value=".5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select></div></footer>
     </main>
   </div>
-  <script type="module" src="./js/app.js"></script>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</div>
+<script type="module" src="./js/app.js"></script>
 </body>
 </html>
