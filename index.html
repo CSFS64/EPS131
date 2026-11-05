@@ -35,7 +35,7 @@
         <div class="map-legend"><span><i class="line-swatch p"></i>P</span><span><i class="line-swatch s"></i>S</span><span><i class="station-swatch"></i>Station</span></div>
         <div class="map-importance-key" id="map-importance-key" hidden><span>Station impact</span><i class="impact-swatch zero"></i><i class="impact-swatch low"></i><i class="impact-swatch medium"></i><i class="impact-swatch high"></i><i class="impact-swatch highest"></i><i class="impact-swatch lost" title="No alert"></i></div>
         <div class="candidate-pointer" id="candidate-pointer" hidden></div>
-        <div class="map-candidate-key" id="map-candidate-key" hidden><span id="candidate-scale-title">Mean trigger margin</span><div class="candidate-colorbar margin" id="candidate-colorbar"></div><div class="candidate-scale"><span id="candidate-scale-min">0 s</span><span id="candidate-scale-mid">0.00 s</span><span id="candidate-scale-max">0.00 s</span></div></div>
+        <div class="map-candidate-key" id="map-candidate-key" hidden><span id="candidate-scale-title">Mean trigger margin</span><div class="candidate-colorbar margin" id="candidate-colorbar"></div><div class="candidate-scale"><span id="candidate-scale-min">0 s</span><span id="candidate-scale-mid">0 s</span><span id="candidate-scale-max">0.00 s</span></div></div>
         <div class="map-attribution" id="map-attribution">Imagery © Esri, Maxar, Earthstar Geographics, GIS User Community</div>
       </div>
       <div class="map-layers">
@@ -89,6 +89,16 @@
           <summary><span>Stations</span><span class="chevron" aria-hidden="true"></span></summary>
           <div class="section-body">
             <div class="section-actions"><button type="button" id="enable-all" class="minor-button">Enable all</button><button type="button" id="disable-all" class="minor-button">Disable all</button><span id="station-count" class="list-count">15 / 15</span></div>
+            <div class="list-subhead impact-title"><span>Manual station experiment</span><span class="impact-actions"><button type="button" class="minor-button" id="manual-station-focus">Focus</button><button type="button" class="minor-button" id="manual-station-remove">Remove</button></span></div>
+            <div class="impact-caption">Right-click the map to place or move one hypothetical station (NEW1). Constant velocity only. This tests the Station importance network; the Candidate station map remains relative to the original 15 stations.</div>
+            <label class="manual-guide-toggle"><input type="checkbox" id="manual-station-guide" checked><span>Show original kth → (k+1)th P-arrival distance band</span></label>
+            <div class="manual-site-summary" id="manual-site-summary" role="status" aria-live="polite">Right-click anywhere on the map to test a station location.</div>
+            <div class="manual-site-stats" id="manual-site-stats">
+              <div><span>Original removal loss</span><strong id="manual-gap-before">—</strong></div>
+              <div><span>With NEW1</span><strong id="manual-gap-after">—</strong></div>
+              <div><span>Sensitivity reduction</span><strong id="manual-gap-change">—</strong></div>
+            </div>
+            <div class="manual-site-detail" id="manual-site-detail">Choose a location inside the dashed distance band to test whether the new station fills the arrival-time gap.</div>
             <div class="list-subhead impact-title"><span>Candidate station map</span><span class="impact-actions"><button type="button" class="minor-button" id="candidate-focus">Focus</button><button type="button" class="minor-button" id="candidate-export">CSV</button><button type="button" class="minor-button impact-map-switch" id="candidate-map-toggle" aria-pressed="true">Overlay on</button></span></div>
             <div class="candidate-controls">
               <label class="mini-field" for="candidate-source-mode"><span id="candidate-source-label">Current event</span><select id="candidate-source-mode"><option value="event">Current event</option><option value="manual">Manual source</option></select></label>
@@ -108,7 +118,7 @@
             <div id="candidate-top-list" class="candidate-top-list"></div>
             <div class="candidate-caption" id="candidate-description">Mean gain across 21 deterministic source scenarios · Not observed earthquake probabilities</div>
             <div class="list-subhead impact-title"><span>Station importance</span><span class="impact-actions"><button type="button" class="minor-button" id="export-impact-png" title="Save full station importance heatmap as PNG">PNG</button><button type="button" class="minor-button impact-map-switch" id="impact-map-toggle" aria-pressed="false">Map colors</button></span></div>
-            <div class="impact-caption">Alert delay (s) if a station is disabled · k = 1–15</div>
+            <div class="impact-caption">Alert delay (s) if a station is disabled · k = 1–15 (16 with NEW1)</div>
             <div id="station-importance" class="impact-matrix" role="region" tabindex="0" aria-label="Station importance heatmap"></div>
             <div class="impact-legend"><span><i class="impact-swatch zero"></i>0</span><span><i class="impact-swatch low"></i>&lt;0.5</span><span><i class="impact-swatch medium"></i>0.5–1.5</span><span><i class="impact-swatch high"></i>1.5–3</span><span><i class="impact-swatch highest"></i>3+</span><span><i class="impact-swatch lost"></i>No alert</span></div>
             <div class="list-subhead">Station arrivals</div>

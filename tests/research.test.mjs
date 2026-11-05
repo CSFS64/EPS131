@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {modelComparisons,timingStages,alertStations,topResiduals,stationImportance,importanceColor,candidateStationMap,scenarioSources,applyCandidateMetric,candidateMarginColor} from '../js/research.js';
-import {calculateNetwork} from '../js/physics.js';
+import {modelComparisons,timingStages,alertStations,topResiduals,stationImportance,importanceColor,candidateStationMap,scenarioSources,applyCandidateMetric,candidateMarginColor ,compareStationPlacement,TEST_STATION_ID} from '../js/research.js';
+import {calculateNetwork,destination} from '../js/physics.js';
 import {normalizeObservations} from '../js/observations.js';
 const events=JSON.parse(readFileSync(new URL('../data/events.json',import.meta.url)));
 const one=JSON.parse(readFileSync(new URL('../data/models-1d.json',import.meta.url)));
@@ -172,4 +172,55 @@ test('regional margin reflects deterministic source ensemble',()=>{
  assert.notDeepEqual(regional.cells.map(c=>c.margin),single.cells.map(c=>c.margin));
  assert.ok(regional.minMargin<0);
  assert.ok(regional.maxMargin>0);
+});
+
+
+test('right-click hypothetical station between kth and k+1 reduces removal penalty without earlier delivery',()=>{
+ const baseline=calculateNetwork(data,data.model);
+ const k=data.model.triggersRequired;
+ const old=baseline.stations.filter(s=>s.enabled&&Number.isFinite(s.available));
+ const d=(old[k-1].distanceKm+old[k].distanceKm)/2;
+ const loc=destination(data.event.latitude,data.event.longitude,90,d);
+ const comparison=compareStationPlacement(data,data.model,new Set(),loc);
+ assert.equal(comparison.between,true);
+ assert.ok(comparison.rank===k+1);
+ assert.ok(comparison.beforeGap>comparison.afterGap);
+ assert.ok(comparison.change>0);
+ assert.ok(Math.abs(comparison.deliveryGain)<1e-9);
+ assert.ok(Math.abs(comparison.beforeGap-(old[k].available-old[k-1].available))<1e-9);
+ assert.equal(comparison.augmented.stations.length,16);
+ assert.equal(comparison.custom.id,TEST_STATION_ID);
+ const importance=stationImportance(comparison.augmented,16);
+ const originalFourth=importance.rows.find(x=>x.id===old[k-1].id).cells[k-1];
+ assert.ok(Math.abs(originalFourth.delta-comparison.afterGap)<1e-9);
+});
+
+test('disabled hypothetical site restores original removal sensitivity',()=>{
+ const baseline=calculateNetwork(data,data.model);
+ const k=data.model.triggersRequired;
+ const old=baseline.stations.filter(s=>s.enabled&&Number.isFinite(s.available));
+ const loc=destination(data.event.latitude,data.event.longitude,135,(old[k-1].distanceKm+old[k].distanceKm)/2);
+ const experiment=compareStationPlacement(data,data.model,new Set([TEST_STATION_ID]),loc);
+ assert.equal(experiment.custom.enabled,false);
+ assert.equal(experiment.rank,null);
+ assert.equal(experiment.between,false);
+ assert.ok(Math.abs(experiment.afterGap-experiment.beforeGap)<1e-9);
+ assert.ok(Math.abs(experiment.change)<1e-9);
+});
+
+test('placing a hypothetical station outside arrival band does not automatically reduce sensitivity',()=>{
+ const baseline=calculateNetwork(data,data.model);
+ const old=baseline.stations.filter(s=>s.enabled&&Number.isFinite(s.available));
+ const far=destination(data.event.latitude,data.event.longitude,45,old[5].distanceKm+90);
+ const experiment=compareStationPlacement(data,data.model,new Set(),far);
+ assert.equal(experiment.between,false);
+ assert.ok(Math.abs(experiment.afterGap-experiment.beforeGap)<1e-9);
+ assert.ok(Math.abs(experiment.deliveryGain)<1e-9);
+});
+
+test('removal gap is undefined rather than zero when no replacement station exists',()=>{
+ const experiment=compareStationPlacement(data,{...data.model,triggersRequired:15},new Set(),{latitude:data.event.latitude,longitude:data.event.longitude});
+ assert.equal(experiment.beforeGap,null);
+ assert.ok(Number.isFinite(experiment.afterGap));
+ assert.equal(experiment.change,null);
 });

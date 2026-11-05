@@ -31,6 +31,28 @@ export function topResiduals(validation, count=10) {
   return validation?.comparisons?.filter(x=>Number.isFinite(x.residual)).slice().sort((a,b)=>Math.abs(b.residual)-Math.abs(a.residual)).slice(0,count)??[];
 }
 
+
+export const TEST_STATION_ID='SIM.NEW1';
+
+export function compareStationPlacement(data,params,disabled,location){
+  const baseline=calculateNetwork(data,params,disabled);
+  const station={id:TEST_STATION_ID,code:'NEW1',latitude:location.latitude,longitude:location.longitude,simulated:true};
+  const augmented=calculateNetwork({...data,stations:[...data.stations,station]},params,disabled);
+  const k=params.triggersRequired;
+  const ordered=result=>result.stations.filter(s=>s.enabled&&Number.isFinite(s.available)).sort((a,b)=>a.available-b.available);
+  const old=ordered(baseline), next=ordered(augmented);
+  const gap=items=>items.length>k?items[k].available-items[k-1].available:null;
+  const beforeGap=gap(old),afterGap=gap(next);
+  const custom=augmented.stations.find(s=>s.id===TEST_STATION_ID);
+  const rank=next.findIndex(s=>s.id===TEST_STATION_ID)+1;
+  const targetStart=old[k-1]??null,targetEnd=old[k]??null;
+  const between=!!(custom?.enabled&&targetStart&&targetEnd&&custom.available>targetStart.available&&custom.available<targetEnd.available);
+  return {baseline,augmented,old,newOrder:next,custom,rank:custom?.enabled?rank:null,k,
+    beforeGap,afterGap,change:beforeGap!==null&&afterGap!==null?beforeGap-afterGap:null,
+    deliveryGain:baseline.delivered!==null&&augmented.delivered!==null?baseline.delivered-augmented.delivered:null,
+    targetStart,targetEnd,between};
+}
+
 export function stationImportance(result, maxK=8) {
   const enabled=result.stations.filter(s=>s.enabled&&Number.isFinite(s.available)).sort((a,b)=>a.available-b.available);
   const thresholds=Array.from({length:Math.min(result.stations.length,Math.max(1,maxK))},(_,i)=>i+1);

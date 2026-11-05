@@ -1,7 +1,7 @@
 import {calculateNetwork} from './physics.js';
 import {EEWMap} from './map.js';
 import {parseSTP,normalizeObservations,evaluateArrivals} from './observations.js';
-import {modelComparisons,timingStages,alertStations,topResiduals,stationImportance,importanceColor,candidateStationMap,candidateCellColor,applyCandidateMetric,candidateMarginColor} from './research.js';
+import {modelComparisons,timingStages,alertStations,topResiduals,stationImportance,importanceColor,candidateStationMap,candidateCellColor,applyCandidateMetric,candidateMarginColor,compareStationPlacement,TEST_STATION_ID} from './research.js';
 
 const $=id=>document.getElementById(id);
 const settings={vp:['vpKmS',true],vs:['vsKmS',true],'trigger-count':['triggersRequired',false],'detect-delay':['detectionDelayS',false],'network-delay':['networkDelayS',false],'process-delay':['processingDelayS',false],'delivery-delay':['deliveryDelayS',false]};
@@ -14,7 +14,7 @@ const polarity=n=>n===null?'':n<0?'negative':'positive';
 const candidateSteps={coarse:.10,medium:.055,fine:.035};
 let data,defaults,params,results,map,observed=null,validation=null,modelType='constant',modelData={},cases=[],observationsCache={},selectionEpoch=0;
 let elapsed=0,playing=false,speed=1,lastFrame=0,selected={kind:'city',id:'ridgecrest'},toastHandle,importance=null;
-let candidateGrid=null;
+let candidateGrid=null,manualStation=null,manualComparison=null;
 const candidateState={sourceMode:'event',manual:{latitude:35.705,longitude:-117.505,depthKm:10},stepKey:'medium',analysis:'regional',radiusKm:35,metric:'margin',enabled:true};
 const disabled=new Set();
 
@@ -31,6 +31,7 @@ async function init(){
     data={...collection,event:cases[0]};params={...collection.model};defaults={...params};
     candidateState.manual={latitude:data.event.latitude,longitude:data.event.longitude,depthKm:data.event.depthKm};
     map=new EEWMap($('map'),select);map.data=data;map.selection=selected;
+    map.onMapRightClick=placeManualStation;
     map.onCandidateHover=(cell,x,y)=>{
       const tip=$('candidate-pointer');
       if(!cell||!map.candidateEnabled){tip.hidden=true;return;}
@@ -125,13 +126,80 @@ function currentCandidateSource(){
 
 function refresh(){
   if(!data)return;
-  results=calculateNetwork(data,params,disabled,activePredictions());
+  const useManual=modelType==='constant'&&!!manualStation;
+  const allCount=data.stations.length+(useManual?1:0);
+  $('trigger-count').max=String(allCount);
+  if(params.triggersRequired>allCount){params.triggersRequired=allCount;$('trigger-count').value=String(allCount);}
+  const networkData=useManual?{...data,stations:[...data.stations,{id:TEST_STATION_ID,code:'NEW1',...manualStation,simulated:true}]}:data;
+  results=calculateNetwork(networkData,params,disabled,activePredictions());
   map.results=results;
   validation=observed?evaluateArrivals(results.stations,observed):null;
   updateStationImportance();
+  updateManualStationPanel();
   updateCandidateMap();
   map.render();
   updateReadouts();updateComparison();updateTiming();updateStationList();updateCityList();updateInspector();updateValidation();
+}
+
+function placeManualStation(location){
+  if(!Number.isFinite(location.latitude)||!Number.isFinite(location.longitude)||Math.abs(location.latitude)>85||Math.abs(location.longitude)>180)return;
+  if(modelType!=='constant'){
+    setModel('constant');
+    notify('Switched to Constant velocity for the hypothetical station');
+  }
+  manualStation={latitude:location.latitude,longitude:location.longitude};
+  disabled.delete(TEST_STATION_ID);
+  candidateState.enabled=false;
+  map.importanceEnabled=true;
+  map.showStations=true;map.showLabels=true;
+  $('toggle-stations').checked=true;
+  $('impact-map-toggle').setAttribute('aria-pressed','true');
+  $('map-importance-key').hidden=false;
+  $('section-stations').open=true;
+  selected={kind:'station',id:TEST_STATION_ID};map.selection=selected;
+  refresh();
+  notify('NEW1 positioned. Compare removal sensitivity before and after.');
+}
+
+function removeManualStation(){
+  if(!manualStation)return;
+  manualStation=null;manualComparison=null;disabled.delete(TEST_STATION_ID);
+  if(selected.id===TEST_STATION_ID){selected={kind:'event',id:data.event.id};map.selection=selected;}
+  refresh();notify('Hypothetical station removed');
+}
+
+function updateManualStationPanel(){
+  const baseline=calculateNetwork(data,params,disabled,modelType==='constant'?null:activePredictions());
+  const k=params.triggersRequired;
+  const enabled=baseline.stations.filter(s=>s.enabled&&Number.isFinite(s.available));
+  const kth=enabled[k-1],next=enabled[k];
+  const baselineGap=kth&&next?next.available-kth.available:null;
+  const active=modelType==='constant';
+  const available=manualStation&&active;
+  manualComparison=available?compareStationPlacement(data,params,disabled,manualStation):null;
+  const stat=manualComparison?.custom;
+  const postGap=manualComparison?.afterGap??null;
+  $('manual-gap-before').textContent=active?(baselineGap===null?'No finite gap':f2(baselineGap)):'—';
+  $('manual-gap-after').textContent=!available?'—':postGap===null?'No alert on failure':f2(postGap);
+  $('manual-gap-change').textContent=!available?'—':manualComparison.change===null?'—':signed(manualComparison.change);
+  $('manual-station-focus').disabled=!manualStation;
+  $('manual-station-remove').disabled=!manualStation;
+  const band=$('manual-station-guide').checked&&active&&kth&&next;
+  map.targetAnnulus=band?{latitude:data.event.latitude,longitude:data.event.longitude,innerKm:kth.distanceKm,outerKm:next.distanceKm}:null;
+  const text=$('manual-site-summary'),detail=$('manual-site-detail');
+  if(!active){text.textContent='The manual station experiment is available only in Constant velocity. Existing 1D/3D data have no predicted arrivals for arbitrary stations.';detail.textContent='Switch to Constant velocity to activate the hypothetical station.';return;}
+  if(!manualStation){
+    text.textContent=`Right-click the map to add NEW1. k=${k}; ${kth&&next?`original gap between ${kth.code} (#${k}) and ${next.code} (#${k+1}): ${f2(baselineGap)}.`:'No finite original adjacent-station gap.'}`;
+    detail.textContent=band?`The two dashed circles show epicentral distances ${kth.distanceKm.toFixed(1)}–${next.distanceKm.toFixed(1)} km. Place NEW1 in this distance band to test the hypothesis.`:'Right-click to add or move the test station. The guide can be enabled above.';
+    return;
+  }
+  text.textContent=`NEW1 · ${manualStation.latitude.toFixed(4)}°, ${manualStation.longitude.toFixed(4)}° · P arrival ${f2(stat?.p)} · ranked ${manualComparison.rank??'—'} of ${manualComparison.newOrder.length}`;
+  if(!stat?.enabled){detail.textContent='NEW1 is disabled in Station arrivals; enable it to evaluate the experiment.';return;}
+  if(manualComparison.between){
+    detail.textContent=`NEW1 fills the original #${k}–#${k+1} arrival gap. Original alert time ${f2(manualComparison.baseline.delivered)}, after adding NEW1 ${f2(manualComparison.augmented.delivered)}. The removal penalty drops by ${f2(manualComparison.change)}; the baseline delivery is unchanged.`;
+  }else{
+    detail.textContent=`NEW1 is outside the original #${k}–#${k+1} arrival gap. Delivery-time change: ${manualComparison.deliveryGain===null?'not available':signed(manualComparison.deliveryGain)}. The removal penalty may not decrease. This result tests position, not geographic proximity between two existing stations.`;
+  }
 }
 
 function updateReadouts(){
@@ -184,7 +252,7 @@ function updateTiming(){
 function updateStationImportance(){
   const container=$('station-importance');
   const scroll=container.scrollLeft;
-  importance=stationImportance(results,15);
+  importance=stationImportance(results,results.stations.length);
   map.impactValues=new Map(importance.rows.map(row=>[row.id,row.cells.find(cell=>cell.k===importance.currentK)]));
   const table=make('table','importance-table');
   const head=make('thead');const headings=make('tr');
@@ -324,7 +392,7 @@ function exportImportancePNG(){
   const stops=[['#ffffff','0'],['#d8eaee','<0.5'],['#a8d1d9','0.5–1.5'],['#62acbb','1.5–3'],['#006d82','3+'],['#9b4542','No alert']];
   let x=26;
   for(const [color,label] of stops){c.fillStyle=color;c.fillRect(x,y,16,13);c.strokeStyle='#94a7ae';c.strokeRect(x+.5,y+.5,15,12);c.fillStyle='#435c68';c.font='11px Arial, sans-serif';c.fillText(label,x+21,y+11);x+=label==='No alert'?98:90;}
-  c.fillStyle='#5c727a';c.font='11px Arial, sans-serif';c.fillText('Source: EEW Lab model output; 15 research stations. Not observed ShakeAlert performance.',26,height-26);
+  c.fillStyle='#5c727a';c.font='11px Arial, sans-serif';c.fillText(`Source: EEW Lab model output; ${results.stations.length} stations including hypothetical NEW1 if present. Not actual ShakeAlert.`,26,height-26);
   canvas.toBlob(blob=>{
     if(!blob){notify('PNG export failed',true);return;}
     const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;
@@ -348,7 +416,7 @@ function updateStationList(){
       if(toggle.checked)disabled.delete(station.id);else disabled.add(station.id);
       refresh();notify(`${station.id}: ${toggle.checked?'enabled':'disabled'}`);
     });
-    const btn=make('button','station-pick');btn.type='button';btn.setAttribute('aria-label',`Focus station ${station.id}`);
+    const btn=make('button','station-pick');btn.type='button';btn.dataset.simulated=String(!!station.simulated);btn.setAttribute('aria-label',`Focus station ${station.id}`);
     const left=make('span','station-main');
     left.append(make('span','rank',ranks.get(station.id)||'–'),make('b','',station.code));
     btn.append(left,make('small','',`${station.p===null?'—':station.p.toFixed(2)+' s'} · ${station.distanceKm.toFixed(1)} km`));
@@ -455,7 +523,7 @@ function setBasemap(style){
 }
 
 function restoreSettings(){
-  params={...defaults};disabled.clear();
+  params={...defaults};disabled.clear();manualStation=null;manualComparison=null;
   for(const [id,[key]] of Object.entries(settings))$(id).value=params[key];
   setPlay(false);setElapsed(0);map.focus(data.event.latitude,data.event.longitude,8);
   refresh();notify('Experiment settings reset');
@@ -494,8 +562,11 @@ function bind(){
     refresh();notify('Trigger and latency values reset');
   });
   $('enable-all').addEventListener('click',()=>{disabled.clear();refresh();notify('All stations enabled');});
-  $('disable-all').addEventListener('click',()=>{data.stations.forEach(s=>disabled.add(s.id));refresh();notify('All stations disabled');});
+  $('disable-all').addEventListener('click',()=>{results.stations.forEach(s=>disabled.add(s.id));refresh();notify('All stations disabled');});
   $('export-impact-png').addEventListener('click',exportImportancePNG);
+  $('manual-station-remove').addEventListener('click',removeManualStation);
+  $('manual-station-focus').addEventListener('click',()=>{if(manualStation){map.focus(manualStation.latitude,manualStation.longitude,Math.max(map.zoom,9));}else map.focus(data.event.latitude,data.event.longitude,8);});
+  $('manual-station-guide').addEventListener('change',refresh);
   $('impact-map-toggle').addEventListener('click',()=>{map.importanceEnabled=!map.importanceEnabled;map.candidateEnabled=false;candidateState.enabled=false;$('candidate-map-toggle').textContent='Overlay off';const button=$('impact-map-toggle');button.setAttribute('aria-pressed',String(map.importanceEnabled));$('map-importance-key').hidden=!map.importanceEnabled;if(map.importanceEnabled&&!map.showStations){map.showStations=true;$('toggle-stations').checked=true;}map.render();});
   $('candidate-source-mode').addEventListener('change',e=>{candidateState.sourceMode=e.target.value;refresh();});
   $('candidate-grid').addEventListener('change',e=>{candidateState.stepKey=e.target.value;refresh();});
@@ -547,7 +618,7 @@ function exportCSV(){
   }
   const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');
   const url=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'}));
-  const a=document.createElement('a');a.href=url;a.download=`eew-lab-${data.event.id}-${modelType}-v0.4.9.csv`;
+  const a=document.createElement('a');a.href=url;a.download=`eew-lab-${data.event.id}-${modelType}-v0.4.11.csv`;
   document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),3000);notify('CSV exported');
 }
 
