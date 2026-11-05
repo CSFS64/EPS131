@@ -5,7 +5,7 @@ const TILE_SERVERS = {street:'https://tile.openstreetmap.org',satellite:'https:/
 const toWorld = (lat, lon, zoom) => {
   const scale = TILE * 2 ** zoom;
   const sinLat = Math.sin(clamp(lat, -85.051128, 85.051128) * Math.PI / 180);
-  return {x: (lon + 180) / 360 * scale, y: (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * scale};
+  return {x: (lon + 180) / 360 * scale, y: (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) / 1 * scale};
 };
 const fromWorld = (x, y, zoom) => {
   const scale = TILE * 2 ** zoom;
@@ -35,6 +35,9 @@ export class EEWMap {
     this.showBaselineWavefront = true;
     this.importanceEnabled = false;
     this.impactValues = new Map();
+    this.candidateEnabled = false;
+    this.candidateCells = [];
+    this.candidateSource = null;
     this.pointer = null;
     this.hover = null;
     this.hitTargets = [];
@@ -100,7 +103,7 @@ export class EEWMap {
         const rect = this.canvas.getBoundingClientRect();
         const x = e.clientX - rect.left, y = e.clientY - rect.top;
         const hit = [...this.hitTargets].reverse().find(t => Math.hypot(t.x-x,t.y-y) < t.r+7);
-        if (hit) this.onSelect(hit.kind, hit.id);
+        if (hit) this.onSelect(hit.kind, hit.id, hit.payload);
       }
       this.pointer = null; this.canvas.classList.remove('dragging');
     });
@@ -119,9 +122,11 @@ export class EEWMap {
     if (this.showP && this.showBaselineWavefront) this.drawWavefront(c, ev, this.elapsed, this.results?.params?.vpKmS ?? this.data.model.vpKmS, satellite?'#8ecde0':'#0b758e', satellite?2.6:2.0, [7,5]);
     if (this.showS && this.showBaselineWavefront) this.drawWavefront(c, ev, this.elapsed, this.results?.params?.vsKmS ?? this.data.model.vsKmS, satellite?'#e7c08d':'#b8823a', satellite?3.0:2.5, []);
     this.hitTargets=[];
+    if (this.candidateEnabled && this.candidateCells?.length) this.drawCandidateCells(c);
     for (const city of this.results?.cities ?? []) this.drawCity(c,city);
     if (this.showStations) for (const station of this.results?.stations ?? []) this.drawStation(c,station);
     this.drawEpicenter(c,ev);
+    if (this.candidateEnabled && this.candidateSource) this.drawCandidateSource(c,this.candidateSource);
   }
   drawGrid(c) {
     c.strokeStyle = '#c1d3d7';c.lineWidth = .75;
@@ -167,10 +172,22 @@ export class EEWMap {
     const r = surfaceWavefrontRadiusKm(t,event.depthKm,velocity);
     if(r===null || r===0)return;
     c.save(); c.strokeStyle=color;c.lineWidth=width;c.setLineDash(dash);
-    
     c.beginPath();
     for(let b=0;b<=360;b+=3){const ll=destination(event.latitude,event.longitude,b,r);const p=this.screenPosition(ll.latitude,ll.longitude);if(b===0)c.moveTo(p.x,p.y);else c.lineTo(p.x,p.y);}
     c.closePath();c.stroke(); c.restore();
+  }
+  drawCandidateCells(c){
+    c.save();
+    for(const cell of this.candidateCells){
+      const half=cell.stepDeg/2;
+      const nw=this.screenPosition(cell.lat+half,cell.lon-half);
+      const se=this.screenPosition(cell.lat-half,cell.lon+half);
+      const x=Math.min(nw.x,se.x), y=Math.min(nw.y,se.y), w=Math.abs(se.x-nw.x), h=Math.abs(se.y-nw.y);
+      if(x>this.width||y>this.height||x+w<0||y+h<0)continue;
+      c.fillStyle=cell.status==='recover'?'rgba(106,99,164,.5)':cell.status==='none'?'rgba(184,173,168,.25)':cell.gain<.02?'rgba(255,255,255,.08)':cell.gain<.2?'rgba(229,240,243,.28)':cell.gain<.8?'rgba(190,219,226,.36)':cell.gain<1.5?'rgba(127,184,198,.45)':'rgba(29,127,150,.57)';
+      c.fillRect(x,y,w,h);
+    }
+    c.restore();
   }
   drawEpicenter(c,event){
     const p=this.screenPosition(event.latitude,event.longitude);if(p.x<-30||p.x>this.width+30||p.y<-30||p.y>this.height+30)return;
@@ -181,6 +198,16 @@ export class EEWMap {
     c.beginPath();c.moveTo(0,-9);c.lineTo(8,6);c.lineTo(-8,6);c.closePath();c.fill();c.stroke();
     c.fillStyle=this.baseStyle==='satellite'?'#ffffff':'#7d2932';c.font='700 11px Arial,system-ui';c.shadowColor=this.baseStyle==='satellite'?'#000000':'#ffffff';c.shadowBlur=5;c.fillText('Mw '+event.magnitude.toFixed(1),14,-10);
     c.restore();this.hitTargets.push({kind:'event',id:event.id,x:p.x,y:p.y,r:15});
+  }
+  drawCandidateSource(c,source){
+    const p=this.screenPosition(source.latitude,source.longitude);
+    if(p.x<-24||p.x>this.width+24||p.y<-24||p.y>this.height+24)return;
+    c.save();
+    c.strokeStyle='#5a4ca2';c.lineWidth=1.8;c.fillStyle='#ffffff';
+    c.beginPath();c.arc(p.x,p.y,8,0,Math.PI*2);c.fill();c.stroke();
+    c.beginPath();c.moveTo(p.x-8,p.y);c.lineTo(p.x+8,p.y);c.moveTo(p.x,p.y-8);c.lineTo(p.x,p.y+8);c.stroke();
+    c.fillStyle=this.baseStyle==='satellite'?'#ffffff':'#453f6d';c.font='700 10px Arial,system-ui';c.shadowColor=this.baseStyle==='satellite'?'#000000':'#ffffff';c.shadowBlur=5;c.fillText('Source',p.x+10,p.y-9);
+    c.restore();
   }
   drawCity(c,city){
     const p=this.screenPosition(city.latitude,city.longitude);

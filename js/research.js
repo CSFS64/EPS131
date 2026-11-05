@@ -1,4 +1,4 @@
-import {calculateNetwork} from './physics.js';
+import {calculateNetwork, travelTimeS} from './physics.js';
 import {evaluateArrivals} from './observations.js';
 
 export function modelComparisons(data, params, disabled, observed, predictions) {
@@ -65,4 +65,61 @@ export function importanceColor(cell) {
   if(value<1.5)return '#a8d1d9';
   if(value<3)return '#62acbb';
   return '#006d82';
+}
+
+export function candidateBounds(data, source, paddingDeg=.45) {
+  const lats=[source.latitude,...data.stations.map(s=>s.latitude),...data.cities.map(c=>c.latitude)];
+  const lons=[source.longitude,...data.stations.map(s=>s.longitude),...data.cities.map(c=>c.longitude)];
+  return {
+    minLat:Math.max(-85,Math.min(...lats)-paddingDeg),
+    maxLat:Math.min(85,Math.max(...lats)+paddingDeg),
+    minLon:Math.max(-180,Math.min(...lons)-paddingDeg),
+    maxLon:Math.min(180,Math.max(...lons)+paddingDeg)
+  };
+}
+
+export function candidateCellColor(cell) {
+  if(!cell)return '#ffffff';
+  if(cell.status==='recover')return '#6a63a4';
+  if(cell.status==='none')return '#efecea';
+  const value=cell.gain||0;
+  if(value<.02)return '#ffffff';
+  if(value<.2)return '#e5f0f3';
+  if(value<.8)return '#bedbe2';
+  if(value<1.5)return '#7fb8c6';
+  return '#1d7f96';
+}
+
+export function candidateStationMap(data, params, disabled, source, stepDeg=.1) {
+  const sourceData={...data,event:{...source,id:source.id??'manual',magnitude:source.magnitude??data.event.magnitude,originUTC:source.originUTC??data.event.originUTC}};
+  const baseline=calculateNetwork(sourceData,params,disabled);
+  const active=baseline.stations.filter(s=>s.enabled&&Number.isFinite(s.available)).sort((a,b)=>a.available-b.available);
+  const bounds=candidateBounds(data,sourceData.event);
+  const cells=[];
+  const detection=params.detectionDelayS+params.networkDelayS;
+  const kth=params.triggersRequired;
+  const cols=Math.max(1,Math.round((bounds.maxLon-bounds.minLon)/stepDeg)+1);
+  const rows=Math.max(1,Math.round((bounds.maxLat-bounds.minLat)/stepDeg)+1);
+  for(let r=0;r<rows;r++){
+    const lat=Number((bounds.maxLat-r*stepDeg).toFixed(6));
+    for(let c=0;c<cols;c++){
+      const lon=Number((bounds.minLon+c*stepDeg).toFixed(6));
+      const p=travelTimeS(sourceData.event,{latitude:lat,longitude:lon},params.vpKmS);
+      const available=p+detection;
+      const augmented=[...active,{id:'candidate',code:'NEW',latitude:lat,longitude:lon,p,available,enabled:true}].sort((a,b)=>a.available-b.available);
+      const rank=augmented.findIndex(x=>x.id==='candidate')+1;
+      const kthStation=augmented[kth-1]??null;
+      const delivered=kthStation?kthStation.available+params.processingDelayS+params.deliveryDelayS:null;
+      let status='nochange',gain=0;
+      if(baseline.delivered===null && delivered!==null){status='recover';gain=null;}
+      else if(delivered===null){status='none';gain=null;}
+      else {
+        gain=Math.max(0,(baseline.delivered??delivered)-delivered);
+        status=gain>1e-9?'gain':'nochange';
+      }
+      cells.push({lat,lon,p,available,rank,delivered,gain,status,stepDeg});
+    }
+  }
+  const top=cells.filter(cell=>cell.status==='gain').sort((a,b)=>b.gain-a.gain||a.rank-b.rank).slice(0,8);
+  return {source:sourceData.event,baseline,bounds,stepDeg,rows,cols,cells,top,coverage:`${rows} × ${cols}`};
 }

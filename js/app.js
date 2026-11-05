@@ -1,7 +1,7 @@
 import {calculateNetwork} from './physics.js';
 import {EEWMap} from './map.js';
 import {parseSTP,normalizeObservations,evaluateArrivals} from './observations.js';
-import {modelComparisons,timingStages,alertStations,topResiduals,stationImportance,importanceColor} from './research.js';
+import {modelComparisons,timingStages,alertStations,topResiduals,stationImportance,importanceColor,candidateStationMap,candidateCellColor} from './research.js';
 
 const $=id=>document.getElementById(id);
 const settings={vp:['vpKmS',true],vs:['vsKmS',true],'trigger-count':['triggersRequired',false],'detect-delay':['detectionDelayS',false],'network-delay':['networkDelayS',false],'process-delay':['processingDelayS',false],'delivery-delay':['deliveryDelayS',false]};
@@ -11,8 +11,11 @@ const make=(tag,cls='',value='')=>{const e=document.createElement(tag);if(cls)e.
 const f2=n=>n===null||n===undefined||!Number.isFinite(n)?'—':n.toFixed(2)+' s';
 const signed=n=>n===null||n===undefined||!Number.isFinite(n)?'—':(n>0?'+':'')+n.toFixed(2)+' s';
 const polarity=n=>n===null?'':n<0?'negative':'positive';
+const candidateSteps={coarse:.14,medium:.1,fine:.07};
 let data,defaults,params,results,map,observed=null,validation=null,modelType='constant',modelData={},cases=[],observationsCache={},selectionEpoch=0;
 let elapsed=0,playing=false,speed=1,lastFrame=0,selected={kind:'city',id:'ridgecrest'},toastHandle,importance=null;
+let candidateGrid=null;
+const candidateState={sourceMode:'event',manual:{latitude:35.705,longitude:-117.505,depthKm:10},stepKey:'medium',enabled:true};
 const disabled=new Set();
 
 function notify(text,error=false){
@@ -26,7 +29,11 @@ async function init(){
     if(!request.ok)throw Error('Event catalog unavailable');
     const collection=await request.json();cases=collection.events;
     data={...collection,event:cases[0]};params={...collection.model};defaults={...params};
+    candidateState.manual={latitude:data.event.latitude,longitude:data.event.longitude,depthKm:data.event.depthKm};
     map=new EEWMap($('map'),select);map.data=data;map.selection=selected;
+    $('candidate-lat').value=String(candidateState.manual.latitude.toFixed(3));
+    $('candidate-lon').value=String(candidateState.manual.longitude.toFixed(3));
+    $('candidate-depth').value=String(candidateState.manual.depthKm.toFixed(1));
     $('scrubber').max=params.durationS;$('duration-readout').textContent=params.durationS+' s';
     bind();refresh();setElapsed(0);
     $('load-state').textContent='';
@@ -82,6 +89,7 @@ function selectEvent(id){
   if(!event||event.id===data.event.id)return;
   data={...data,event};map.data=data;selected={kind:'city',id:'ridgecrest'};map.selection=selected;
   $('event-select').value=event.id;map.focus(event.latitude,event.longitude,8);
+  if(candidateState.sourceMode==='event'){$('candidate-lat').value=String(event.latitude.toFixed(3));$('candidate-lon').value=String(event.longitude.toFixed(3));$('candidate-depth').value=String(event.depthKm.toFixed(1));}
   setPlay(false);setElapsed(0);loadObservations();
 }
 
@@ -98,12 +106,22 @@ function setModel(key){
   refresh();
 }
 
+function currentCandidateSource(){
+  if(candidateState.sourceMode==='event')return {...data.event};
+  const lat=Number($('candidate-lat').value), lon=Number($('candidate-lon').value), depth=Number($('candidate-depth').value);
+  if(!Number.isFinite(lat)||!Number.isFinite(lon)||!Number.isFinite(depth)||Math.abs(lat)>85||Math.abs(lon)>180||depth<0||depth>50)return null;
+  return {id:'manual-source',latitude:lat,longitude:lon,depthKm:depth,magnitude:data.event.magnitude,originUTC:data.event.originUTC};
+}
+
 function refresh(){
   if(!data)return;
   results=calculateNetwork(data,params,disabled,activePredictions());
   map.results=results;
   validation=observed?evaluateArrivals(results.stations,observed):null;
-  updateStationImportance();map.render();updateReadouts();updateComparison();updateTiming();updateStationList();updateCityList();updateInspector();updateValidation();
+  updateStationImportance();
+  updateCandidateMap();
+  map.render();
+  updateReadouts();updateComparison();updateTiming();updateStationList();updateCityList();updateInspector();updateValidation();
 }
 
 function updateReadouts(){
@@ -196,6 +214,42 @@ function updateStationImportance(){
     body.append(tr);
   }
   table.append(body);container.replaceChildren(table);container.scrollLeft=scroll;
+}
+
+function updateCandidateMap(){
+  const source=currentCandidateSource();
+  $('candidate-manual-fields').hidden=candidateState.sourceMode!=='manual';
+  $('candidate-source-label').textContent=candidateState.sourceMode==='event'?'Current event':'Manual source';
+  if(!source){
+    candidateGrid=null;map.candidateCells=[];map.candidateSource=null;updateCandidatePanel('Invalid source values');return;
+  }
+  if(modelType!=='constant'){
+    candidateGrid=null;map.candidateCells=[];map.candidateSource=candidateState.enabled?source:null;updateCandidatePanel('Available in Constant velocity mode');return;
+  }
+  candidateGrid=candidateStationMap(data,params,disabled,source,candidateSteps[candidateState.stepKey]);
+  map.candidateCells=candidateState.enabled?candidateGrid.cells:[];
+  map.candidateSource=candidateState.enabled?source:null;
+  updateCandidatePanel(`${candidateGrid.coverage} cells · best ${candidateGrid.top[0]?.gain?.toFixed(2)??'0.00'} s`);
+}
+
+function updateCandidatePanel(statusText=''){
+  const overlayActive=candidateState.enabled&&modelType==='constant'&&candidateGrid?.cells?.length;
+  map.candidateEnabled=!!overlayActive;
+  $('candidate-map-toggle').setAttribute('aria-pressed',String(!!overlayActive));
+  $('candidate-map-toggle').textContent=overlayActive?'Overlay on':'Overlay off';
+  $('candidate-status').textContent=statusText||'No grid';
+  $('map-candidate-key').hidden=!overlayActive;
+  const root=$('candidate-top-list');root.replaceChildren();
+  if(!candidateGrid?.top?.length){root.append(make('div','field-hint',modelType==='constant'?'No high-gain cells in view':'Switch to Constant velocity'));return;}
+  for(const cell of candidateGrid.top){
+    const btn=make('button','candidate-row');btn.type='button';
+    const left=make('span','candidate-main');left.append(make('b','',`${cell.lat.toFixed(2)}, ${cell.lon.toFixed(2)}`),make('small','',`rank ${cell.rank}`));
+    const gain=make('strong','',`+${cell.gain.toFixed(2)} s`);
+    btn.append(left,gain);
+    btn.style.borderColor=candidateCellColor(cell);
+    btn.addEventListener('click',()=>map.focus(cell.lat,cell.lon,Math.max(map.zoom,8.5)));
+    root.append(btn);
+  }
 }
 
 function focusImportanceStation(id){
@@ -292,18 +346,15 @@ function updateInspector(){
     $('selected-name').textContent=station.id;
     $('selected-distance').textContent=station.distanceKm.toFixed(1)+' km';
     $('lead-label').textContent='P arrival';display.textContent=f2(station.p);
-
   }else if(selected.kind==='event'){
     $('selected-name').textContent='Ridgecrest';
     $('selected-distance').textContent=data.event.id;
     $('lead-label').textContent='Alert issue';display.textContent=f2(results.issue);
-
   }else if(city){
     $('selected-name').textContent=city.name;
     $('selected-distance').textContent=city.distanceKm.toFixed(1)+' km';
     $('lead-label').textContent='S-wave lead';display.textContent=f2(city.lead);
     display.classList.toggle('negative',city.lead!==null&&city.lead<0);
-
   }
 }
 
@@ -375,6 +426,17 @@ function restoreSettings(){
   refresh();notify('Experiment settings reset');
 }
 
+function exportCandidateCSV(){
+  if(!candidateGrid){notify('Candidate grid unavailable',true);return;}
+  const source=currentCandidateSource();
+  const rows=[['Source mode',candidateState.sourceMode],['Latitude',source.latitude],['Longitude',source.longitude],['Depth km',source.depthKm],['Grid step deg',candidateSteps[candidateState.stepKey]],['Trigger stations',params.triggersRequired],[],['lat','lon','rank','gain_s','status','candidate_p_s','candidate_available_s']];
+  for(const cell of candidateGrid.cells)rows.push([cell.lat,cell.lon,cell.rank,cell.gain??'',cell.status,cell.p,cell.available]);
+  const csv=rows.map(r=>r.map(v=>'\"'+String(v).replace(/\"/g,'\"\"')+'\"').join(',')).join('\r\n');
+  const url=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));
+  const a=document.createElement('a');a.href=url;a.download=`candidate-station-grid-${candidateState.sourceMode}.csv`;
+  document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),3000);notify('Candidate grid exported');
+}
+
 function bind(){
   $('event-select').addEventListener('change',e=>selectEvent(e.target.value));
   $('model-select').addEventListener('change',e=>setModel(e.target.value));
@@ -383,7 +445,7 @@ function bind(){
   $('reset-all').addEventListener('click',restoreSettings);
   $('toggle-p').addEventListener('change',e=>{map.showP=e.target.checked;map.render();});
   $('toggle-s').addEventListener('change',e=>{map.showS=e.target.checked;map.render();});
-  $('toggle-stations').addEventListener('change',e=>{map.showStations=e.target.checked;map.showLabels=e.target.checked;$('map-importance-key').hidden=!map.importanceEnabled||!map.showStations;map.render();});
+  $('toggle-stations').addEventListener('change',e=>{map.showStations=e.target.checked;map.showLabels=e.target.checked;$('map-importance-key').hidden=!map.importanceEnabled||!map.showStations;$('map-candidate-key').hidden=!map.candidateEnabled;map.render();});
   $('zoom-in').addEventListener('click',()=>map.changeZoom(.7));
   $('zoom-out').addEventListener('click',()=>map.changeZoom(-.7));
   $('recenter').addEventListener('click',()=>map.focus(data.event.latitude,data.event.longitude,8));
@@ -399,7 +461,15 @@ function bind(){
   $('enable-all').addEventListener('click',()=>{disabled.clear();refresh();notify('All stations enabled');});
   $('disable-all').addEventListener('click',()=>{data.stations.forEach(s=>disabled.add(s.id));refresh();notify('All stations disabled');});
   $('export-impact-png').addEventListener('click',exportImportancePNG);
-  $('impact-map-toggle').addEventListener('click',()=>{map.importanceEnabled=!map.importanceEnabled;const button=$('impact-map-toggle');button.setAttribute('aria-pressed',String(map.importanceEnabled));$('map-importance-key').hidden=!map.importanceEnabled;if(map.importanceEnabled&&!map.showStations){map.showStations=true;$('toggle-stations').checked=true;}map.render();});
+  $('impact-map-toggle').addEventListener('click',()=>{map.importanceEnabled=!map.importanceEnabled;map.candidateEnabled=false;candidateState.enabled=false;$('candidate-map-toggle').textContent='Overlay off';const button=$('impact-map-toggle');button.setAttribute('aria-pressed',String(map.importanceEnabled));$('map-importance-key').hidden=!map.importanceEnabled;if(map.importanceEnabled&&!map.showStations){map.showStations=true;$('toggle-stations').checked=true;}map.render();});
+  $('candidate-source-mode').addEventListener('change',e=>{candidateState.sourceMode=e.target.value;refresh();});
+  $('candidate-grid').addEventListener('change',e=>{candidateState.stepKey=e.target.value;refresh();});
+  $('candidate-lat').addEventListener('change',refresh);
+  $('candidate-lon').addEventListener('change',refresh);
+  $('candidate-depth').addEventListener('change',refresh);
+  $('candidate-use-center').addEventListener('click',()=>{const center=map.screenToGeo(map.width/2,map.height/2);candidateState.sourceMode='manual';$('candidate-source-mode').value='manual';$('candidate-lat').value=center.latitude.toFixed(3);$('candidate-lon').value=center.longitude.toFixed(3);refresh();notify('Manual source moved to map center');});
+  $('candidate-map-toggle').addEventListener('click',()=>{candidateState.enabled=!candidateState.enabled;if(candidateState.enabled){map.importanceEnabled=false;$('impact-map-toggle').setAttribute('aria-pressed','false');$('map-importance-key').hidden=true;}refresh();});
+  $('candidate-export').addEventListener('click',exportCandidateCSV);
   $('play').addEventListener('click',()=>{if(elapsed>=params.durationS)setElapsed(0);setPlay(!playing);});
   $('restart').addEventListener('click',()=>{setPlay(false);setElapsed(0);});
   $('scrubber').addEventListener('input',e=>setElapsed(Number(e.target.value)));
@@ -421,17 +491,23 @@ function bind(){
 }
 
 function exportCSV(){
-  const rows=[['EEW Lab V0.4.6'],['Event',data.event.id],['Model',modelType],['P velocity',params.vpKmS],['S velocity',params.vsKmS],['Trigger stations',params.triggersRequired],['Detection',params.detectionDelayS],['Telemetry',params.networkDelayS],['Processing',params.processingDelayS],['Delivery latency',params.deliveryDelayS],['Alert issue',results.issue??''],['Message delivery',results.delivered??''],[],['City','P predicted','S predicted','Delivery','S-wave lead']];
+  const rows=[["EEW Lab V0.4.7"],["Event",data.event.id],["Model",modelType],["P velocity",params.vpKmS],["S velocity",params.vsKmS],["Trigger stations",params.triggersRequired],["Detection",params.detectionDelayS],["Telemetry",params.networkDelayS],["Processing",params.processingDelayS],["Delivery latency",params.deliveryDelayS],["Alert issue",results.issue??''],["Message delivery",results.delivered??''],[],["City","P predicted","S predicted","Delivery","S-wave lead"]];
   for(const city of results.cities)rows.push([city.name,city.p??'',city.s??'',results.delivered??'',city.lead??'']);
-  rows.push([],['Station','Phase','Predicted','Observed','Residual']);
+  rows.push([],["Station","Phase","Predicted","Observed","Residual"]);
   for(const r of validation?.comparisons||[])rows.push([r.id,r.phase,r.predicted,r.observed,r.residual]);
-  rows.push([],['Model','P MAE','P N','S MAE','S N']);
+  rows.push([],["Model","P MAE","P N","S MAE","S N"]);
   for(const m of modelComparisons(data,params,disabled,observed,modelData))rows.push([m.label,m.p??'',m.pN??'',m.s??'',m.sN??'']);
-  rows.push([],['Station importance: one-station removal; delay in seconds'],['Station',...importance.thresholds.map(k=>'k='+k)]);
+  rows.push([],["Station importance: one-station removal; delay in seconds"],["Station",...importance.thresholds.map(k=>'k='+k)]);
   for(const station of importance.rows)rows.push([station.id,...station.cells.map(cell=>cell.status==='lost'?'NO_ALERT':cell.status==='unavailable'?'NO_BASELINE':cell.status==='disabled'?'DISABLED':cell.status==='missing'?'NO_PICK':cell.delta)]);
+  if(candidateGrid){
+    const source=currentCandidateSource();
+    rows.push([],["Candidate station map"],["Source mode",candidateState.sourceMode],["Latitude",source.latitude],["Longitude",source.longitude],["Depth km",source.depthKm],["Grid step deg",candidateSteps[candidateState.stepKey]]);
+    rows.push(["lat","lon","rank","gain_s","status","candidate_p_s","candidate_available_s"]);
+    for(const cell of candidateGrid.cells)rows.push([cell.lat,cell.lon,cell.rank,cell.gain??'',cell.status,cell.p,cell.available]);
+  }
   const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');
-  const url=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));
-  const a=document.createElement('a');a.href=url;a.download=`eew-lab-${data.event.id}-${modelType}-v0.4.6.csv`;
+  const url=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'}));
+  const a=document.createElement('a');a.href=url;a.download=`eew-lab-${data.event.id}-${modelType}-v0.4.7.csv`;
   document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),3000);notify('CSV exported');
 }
 

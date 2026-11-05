@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {modelComparisons,timingStages,alertStations,topResiduals,stationImportance,importanceColor} from '../js/research.js';
+import {modelComparisons,timingStages,alertStations,topResiduals,stationImportance,importanceColor,candidateStationMap} from '../js/research.js';
 import {calculateNetwork} from '../js/physics.js';
 import {normalizeObservations} from '../js/observations.js';
 const events=JSON.parse(readFileSync(new URL('../data/events.json',import.meta.url)));
@@ -92,4 +92,20 @@ test('3D station impact responds to event and threshold changes',()=>{
  const b=stationImportance(calculateNetwork(second,second.model,new Set(),model.events[second.event.id]),8);
  assert.ok(a.rows.some((row,i)=>row.cells[3].delta!==b.rows[i].cells[3].delta));
  assert.ok(a.rows.some(row=>row.cells[3].status==='delay'));
+});
+
+
+test('candidate station map finds positive-gain cells near the source',()=>{
+ const grid=candidateStationMap(data,data.model,new Set(),data.event,.14);
+ assert.ok(grid.cells.length>100);
+ assert.ok(grid.top.length>0);
+ assert.ok(grid.top[0].gain>0);
+ assert.ok(grid.top[0].rank<=data.model.triggersRequired);
+});
+
+test('candidate station map responds to manual source depth and location',()=>{
+ const a=candidateStationMap(data,data.model,new Set(),{latitude:data.event.latitude,longitude:data.event.longitude,depthKm:4},.14);
+ const b=candidateStationMap(data,data.model,new Set(),{latitude:data.event.latitude+.25,longitude:data.event.longitude-.2,depthKm:18},.14);
+ assert.notEqual(a.top[0].lat,b.top[0].lat);
+ assert.notEqual(a.top[0].lon,b.top[0].lon);
 });
