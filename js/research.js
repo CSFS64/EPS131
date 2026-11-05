@@ -90,8 +90,8 @@ export function importanceColor(cell) {
 }
 
 export function candidateBounds(data, source, paddingDeg=.45) {
-  const lats=[source.latitude,...data.stations.map(s=>s.latitude),...data.cities.map(c=>c.latitude)];
-  const lons=[source.longitude,...data.stations.map(s=>s.longitude),...data.cities.map(c=>c.longitude)];
+  const lats=[source.latitude,...data.stations.filter(s=>!s.simulated).map(s=>s.latitude),...data.cities.map(c=>c.latitude)];
+  const lons=[source.longitude,...data.stations.filter(s=>!s.simulated).map(s=>s.longitude),...data.cities.map(c=>c.longitude)];
   return {
     minLat:Math.max(-85,Math.min(...lats)-paddingDeg),
     maxLat:Math.min(85,Math.max(...lats)+paddingDeg),

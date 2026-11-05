@@ -224,3 +224,34 @@ test('removal gap is undefined rather than zero when no replacement station exis
  assert.ok(Number.isFinite(experiment.afterGap));
  assert.equal(experiment.change,null);
 });
+
+test('added station changes the candidate gain map and removal analysis on the same network',()=>{
+ const manual={id:TEST_STATION_ID,code:'NEW1',latitude:data.event.latitude,longitude:data.event.longitude,simulated:true};
+ const enhanced={...data,stations:[...data.stations,manual]};
+ const original=candidateStationMap(data,data.model,new Set(),data.event,.1,{mode:'regional',radiusKm:35});
+ const updated=candidateStationMap(enhanced,data.model,new Set(),data.event,.1,{mode:'regional',radiusKm:35});
+ assert.equal(original.cells.length,updated.cells.length);
+ assert.ok(Math.abs(original.maxGain-updated.maxGain)>.01);
+ const importance=stationImportance(calculateNetwork(enhanced,data.model),16);
+ assert.equal(importance.rows.length,16);
+ assert.ok(importance.rows.some(row=>row.id===TEST_STATION_ID));
+});
+
+test('disabling added station restores the original candidate placement results',()=>{
+ const manual={id:TEST_STATION_ID,code:'NEW1',latitude:data.event.latitude,longitude:data.event.longitude,simulated:true};
+ const enhanced={...data,stations:[...data.stations,manual]};
+ for(const mode of ['single','regional']){
+  const baseline=candidateStationMap(data,data.model,new Set(),data.event,.1,{mode,radiusKm:35});
+  const disabledNew=candidateStationMap(enhanced,data.model,new Set([TEST_STATION_ID]),data.event,.1,{mode,radiusKm:35});
+  assert.deepEqual(baseline.cells.map(c=>c.gain),disabledNew.cells.map(c=>c.gain));
+ }
+});
+
+test('distant added station never expands candidate map bounds unexpectedly',()=>{
+ const manual={id:TEST_STATION_ID,code:'NEW1',latitude:42,longitude:-122,simulated:true};
+ const enhanced={...data,stations:[...data.stations,manual]};
+ const baseline=candidateStationMap(data,data.model,new Set(),data.event,.1);
+ const augmented=candidateStationMap(enhanced,data.model,new Set(),data.event,.1);
+ assert.equal(augmented.cols,baseline.cols);
+ assert.equal(augmented.rows,baseline.rows);
+});

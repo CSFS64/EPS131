@@ -1,7 +1,7 @@
 import {calculateNetwork} from './physics.js';
 import {EEWMap} from './map.js';
 import {parseSTP,normalizeObservations,evaluateArrivals} from './observations.js';
-import {modelComparisons,timingStages,alertStations,topResiduals,stationImportance,importanceColor,candidateStationMap,candidateCellColor,applyCandidateMetric,candidateMarginColor,compareStationPlacement,TEST_STATION_ID} from './research.js';
+import {modelComparisons,timingStages,alertStations,topResiduals,stationImportance,importanceColor,candidateStationMap,candidateCellColor,applyCandidateMetric,candidateMarginColor,TEST_STATION_ID} from './research.js';
 
 const $=id=>document.getElementById(id);
 const settings={vp:['vpKmS',true],vs:['vsKmS',true],'trigger-count':['triggersRequired',false],'detect-delay':['detectionDelayS',false],'network-delay':['networkDelayS',false],'process-delay':['processingDelayS',false],'delivery-delay':['deliveryDelayS',false]};
@@ -14,7 +14,7 @@ const polarity=n=>n===null?'':n<0?'negative':'positive';
 const candidateSteps={coarse:.10,medium:.055,fine:.035};
 let data,defaults,params,results,map,observed=null,validation=null,modelType='constant',modelData={},cases=[],observationsCache={},selectionEpoch=0;
 let elapsed=0,playing=false,speed=1,lastFrame=0,selected={kind:'city',id:'ridgecrest'},toastHandle,importance=null;
-let candidateGrid=null,manualStation=null,manualComparison=null;
+let candidateGrid=null,manualStation=null,networkData=null;
 const candidateState={sourceMode:'event',manual:{latitude:35.705,longitude:-117.505,depthKm:10},stepKey:'medium',analysis:'regional',radiusKm:35,metric:'margin',enabled:true};
 const disabled=new Set();
 
@@ -130,12 +130,13 @@ function refresh(){
   const allCount=data.stations.length+(useManual?1:0);
   $('trigger-count').max=String(allCount);
   if(params.triggersRequired>allCount){params.triggersRequired=allCount;$('trigger-count').value=String(allCount);}
-  const networkData=useManual?{...data,stations:[...data.stations,{id:TEST_STATION_ID,code:'NEW1',...manualStation,simulated:true}]}:data;
+  networkData=useManual?{...data,stations:[...data.stations,{id:TEST_STATION_ID,code:'NEW1',...manualStation,simulated:true}]}:data;
   results=calculateNetwork(networkData,params,disabled,activePredictions());
   map.results=results;
+  map.manualStationPreview=manualStation&&modelType!=='constant'?manualStation:null;
   validation=observed?evaluateArrivals(results.stations,observed):null;
   updateStationImportance();
-  updateManualStationPanel();
+  updateSimulatedStationPanel();
   updateCandidateMap();
   map.render();
   updateReadouts();updateComparison();updateTiming();updateStationList();updateCityList();updateInspector();updateValidation();
@@ -143,63 +144,33 @@ function refresh(){
 
 function placeManualStation(location){
   if(!Number.isFinite(location.latitude)||!Number.isFinite(location.longitude)||Math.abs(location.latitude)>85||Math.abs(location.longitude)>180)return;
-  if(modelType!=='constant'){
-    setModel('constant');
-    notify('Switched to Constant velocity for the hypothetical station');
-  }
+  if(modelType!=='constant')setModel('constant');
   manualStation={latitude:location.latitude,longitude:location.longitude};
   disabled.delete(TEST_STATION_ID);
-  candidateState.enabled=false;
-  map.importanceEnabled=true;
-  map.showStations=true;map.showLabels=true;
-  $('toggle-stations').checked=true;
-  $('impact-map-toggle').setAttribute('aria-pressed','true');
-  $('map-importance-key').hidden=false;
-  $('section-stations').open=true;
   selected={kind:'station',id:TEST_STATION_ID};map.selection=selected;
   refresh();
-  notify('NEW1 positioned. Compare removal sensitivity before and after.');
+  notify('NEW1 added to the network');
 }
 
 function removeManualStation(){
   if(!manualStation)return;
-  manualStation=null;manualComparison=null;disabled.delete(TEST_STATION_ID);
+  manualStation=null;disabled.delete(TEST_STATION_ID);
   if(selected.id===TEST_STATION_ID){selected={kind:'event',id:data.event.id};map.selection=selected;}
   refresh();notify('Hypothetical station removed');
 }
 
-function updateManualStationPanel(){
-  const baseline=calculateNetwork(data,params,disabled,modelType==='constant'?null:activePredictions());
-  const k=params.triggersRequired;
-  const enabled=baseline.stations.filter(s=>s.enabled&&Number.isFinite(s.available));
-  const kth=enabled[k-1],next=enabled[k];
-  const baselineGap=kth&&next?next.available-kth.available:null;
-  const active=modelType==='constant';
-  const available=manualStation&&active;
-  manualComparison=available?compareStationPlacement(data,params,disabled,manualStation):null;
-  const stat=manualComparison?.custom;
-  const postGap=manualComparison?.afterGap??null;
-  $('manual-gap-before').textContent=active?(baselineGap===null?'No finite gap':f2(baselineGap)):'—';
-  $('manual-gap-after').textContent=!available?'—':postGap===null?'No alert on failure':f2(postGap);
-  $('manual-gap-change').textContent=!available?'—':manualComparison.change===null?'—':signed(manualComparison.change);
+function updateSimulatedStationPanel(){
   $('manual-station-focus').disabled=!manualStation;
   $('manual-station-remove').disabled=!manualStation;
-  const band=$('manual-station-guide').checked&&active&&kth&&next;
-  map.targetAnnulus=band?{latitude:data.event.latitude,longitude:data.event.longitude,innerKm:kth.distanceKm,outerKm:next.distanceKm}:null;
-  const text=$('manual-site-summary'),detail=$('manual-site-detail');
-  if(!active){text.textContent='The manual station experiment is available only in Constant velocity. Existing 1D/3D data have no predicted arrivals for arbitrary stations.';detail.textContent='Switch to Constant velocity to activate the hypothetical station.';return;}
-  if(!manualStation){
-    text.textContent=`Right-click the map to add NEW1. k=${k}; ${kth&&next?`original gap between ${kth.code} (#${k}) and ${next.code} (#${k+1}): ${f2(baselineGap)}.`:'No finite original adjacent-station gap.'}`;
-    detail.textContent=band?`The two dashed circles show epicentral distances ${kth.distanceKm.toFixed(1)}–${next.distanceKm.toFixed(1)} km. Place NEW1 in this distance band to test the hypothesis.`:'Right-click to add or move the test station. The guide can be enabled above.';
+  const label=$('manual-station-info');
+  if(!manualStation){label.textContent='Right-click map to add a station';return;}
+  const coords=`${manualStation.latitude.toFixed(4)}°, ${manualStation.longitude.toFixed(4)}°`;
+  if(modelType!=='constant'){
+    label.textContent=`NEW1 · ${coords} · Inactive (Constant velocity only)`;
     return;
   }
-  text.textContent=`NEW1 · ${manualStation.latitude.toFixed(4)}°, ${manualStation.longitude.toFixed(4)}° · P arrival ${f2(stat?.p)} · ranked ${manualComparison.rank??'—'} of ${manualComparison.newOrder.length}`;
-  if(!stat?.enabled){detail.textContent='NEW1 is disabled in Station arrivals; enable it to evaluate the experiment.';return;}
-  if(manualComparison.between){
-    detail.textContent=`NEW1 fills the original #${k}–#${k+1} arrival gap. Original alert time ${f2(manualComparison.baseline.delivered)}, after adding NEW1 ${f2(manualComparison.augmented.delivered)}. The removal penalty drops by ${f2(manualComparison.change)}; the baseline delivery is unchanged.`;
-  }else{
-    detail.textContent=`NEW1 is outside the original #${k}–#${k+1} arrival gap. Delivery-time change: ${manualComparison.deliveryGain===null?'not available':signed(manualComparison.deliveryGain)}. The removal penalty may not decrease. This result tests position, not geographic proximity between two existing stations.`;
-  }
+  const record=results.stations.find(station=>station.id===TEST_STATION_ID);
+  label.textContent=`NEW1 · ${coords} · ${record?.enabled?'P '+f2(record.p):'Disabled'}`;
 }
 
 function updateReadouts(){
@@ -304,7 +275,7 @@ function updateCandidateMap(){
   if(modelType!=='constant'){
     candidateGrid=null;map.setCandidateGrid(null);map.candidateSource=candidateState.enabled?source:null;updateCandidatePanel('Available in Constant velocity mode');return;
   }
-  candidateGrid=candidateStationMap(data,params,disabled,source,candidateSteps[candidateState.stepKey],{mode:candidateState.analysis,radiusKm:candidateState.radiusKm});
+  candidateGrid=candidateStationMap(networkData,params,disabled,source,candidateSteps[candidateState.stepKey],{mode:candidateState.analysis,radiusKm:candidateState.radiusKm});
   applyCandidateMetric(candidateGrid,candidateState.metric);
   map.setCandidateGrid(candidateState.enabled?candidateGrid:null);
   map.candidateSource=candidateState.enabled?source:null;
@@ -449,6 +420,10 @@ function updateInspector(){
     $('selected-name').textContent='Candidate site';
     $('selected-distance').textContent=`${selected.lat.toFixed(3)}, ${selected.lon.toFixed(3)}`;
     $('lead-label').textContent=candidateState.analysis==='regional'?'Mean gain':'Gain';display.textContent=f2(selected.gain);
+  }else if(selected.kind==='station'&&selected.id===TEST_STATION_ID&&manualStation){
+    $('selected-name').textContent='NEW1';
+    $('selected-distance').textContent='Inactive in this model';
+    $('lead-label').textContent='P arrival';display.textContent='—';
   }else if(selected.kind==='event'){
     $('selected-name').textContent='Ridgecrest';
     $('selected-distance').textContent=data.event.id;
@@ -523,7 +498,7 @@ function setBasemap(style){
 }
 
 function restoreSettings(){
-  params={...defaults};disabled.clear();manualStation=null;manualComparison=null;
+  params={...defaults};disabled.clear();manualStation=null;
   for(const [id,[key]] of Object.entries(settings))$(id).value=params[key];
   setPlay(false);setElapsed(0);map.focus(data.event.latitude,data.event.longitude,8);
   refresh();notify('Experiment settings reset');
@@ -566,7 +541,6 @@ function bind(){
   $('export-impact-png').addEventListener('click',exportImportancePNG);
   $('manual-station-remove').addEventListener('click',removeManualStation);
   $('manual-station-focus').addEventListener('click',()=>{if(manualStation){map.focus(manualStation.latitude,manualStation.longitude,Math.max(map.zoom,9));}else map.focus(data.event.latitude,data.event.longitude,8);});
-  $('manual-station-guide').addEventListener('change',refresh);
   $('impact-map-toggle').addEventListener('click',()=>{map.importanceEnabled=!map.importanceEnabled;map.candidateEnabled=false;candidateState.enabled=false;$('candidate-map-toggle').textContent='Overlay off';const button=$('impact-map-toggle');button.setAttribute('aria-pressed',String(map.importanceEnabled));$('map-importance-key').hidden=!map.importanceEnabled;if(map.importanceEnabled&&!map.showStations){map.showStations=true;$('toggle-stations').checked=true;}map.render();});
   $('candidate-source-mode').addEventListener('change',e=>{candidateState.sourceMode=e.target.value;refresh();});
   $('candidate-grid').addEventListener('change',e=>{candidateState.stepKey=e.target.value;refresh();});
@@ -602,12 +576,15 @@ function bind(){
 }
 
 function exportCSV(){
-  const rows=[["EEW Lab V0.4.9"],["Event",data.event.id],["Model",modelType],["P velocity",params.vpKmS],["S velocity",params.vsKmS],["Trigger stations",params.triggersRequired],["Detection",params.detectionDelayS],["Telemetry",params.networkDelayS],["Processing",params.processingDelayS],["Delivery latency",params.deliveryDelayS],["Alert issue",results.issue??''],["Message delivery",results.delivered??''],[],["City","P predicted","S predicted","Delivery","S-wave lead"]];
+  const rows=[["EEW Lab V0.4.12"],["Event",data.event.id],["Model",modelType],["P velocity",params.vpKmS],["S velocity",params.vsKmS],["Trigger stations",params.triggersRequired],["Detection",params.detectionDelayS],["Telemetry",params.networkDelayS],["Processing",params.processingDelayS],["Delivery latency",params.deliveryDelayS],["Alert issue",results.issue??''],["Message delivery",results.delivered??''],[],["City","P predicted","S predicted","Delivery","S-wave lead"]];
+  rows.splice(rows.length-2,0,['NEW1 latitude',manualStation?.latitude??''],['NEW1 longitude',manualStation?.longitude??''],['NEW1 enabled',manualStation?modelType==='constant'&&!disabled.has(TEST_STATION_ID):'']);
   for(const city of results.cities)rows.push([city.name,city.p??'',city.s??'',results.delivered??'',city.lead??'']);
   rows.push([],["Station","Phase","Predicted","Observed","Residual"]);
   for(const r of validation?.comparisons||[])rows.push([r.id,r.phase,r.predicted,r.observed,r.residual]);
   rows.push([],["Model","P MAE","P N","S MAE","S N"]);
   for(const m of modelComparisons(data,params,disabled,observed,modelData))rows.push([m.label,m.p??'',m.pN??'',m.s??'',m.sN??'']);
+  rows.push([],['Network station','P arrival','Signal available','Enabled']);
+  for(const st of results.stations)rows.push([st.id,st.p??'',st.available??'',st.enabled]);
   rows.push([],["Station importance: one-station removal; delay in seconds"],["Station",...importance.thresholds.map(k=>'k='+k)]);
   for(const station of importance.rows)rows.push([station.id,...station.cells.map(cell=>cell.status==='lost'?'NO_ALERT':cell.status==='unavailable'?'NO_BASELINE':cell.status==='disabled'?'DISABLED':cell.status==='missing'?'NO_PICK':cell.delta)]);
   if(candidateGrid){
@@ -618,7 +595,7 @@ function exportCSV(){
   }
   const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');
   const url=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'}));
-  const a=document.createElement('a');a.href=url;a.download=`eew-lab-${data.event.id}-${modelType}-v0.4.11.csv`;
+  const a=document.createElement('a');a.href=url;a.download=`eew-lab-${data.event.id}-${modelType}-v0.4.12.csv`;
   document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),3000);notify('CSV exported');
 }
 

@@ -42,6 +42,11 @@
         <label class="layer-control"><input id="toggle-p" type="checkbox" checked><span>P wave</span></label>
         <label class="layer-control"><input id="toggle-s" type="checkbox" checked><span>S wave</span></label>
         <label class="layer-control"><input id="toggle-stations" type="checkbox" checked><span>Stations</span></label>
+        <div class="simulated-station-tools" role="group" aria-label="Simulated station">
+          <span class="simulated-station-label" id="manual-station-info" role="status" aria-live="polite">Right-click map to add a station</span>
+          <button type="button" class="minor-button" id="manual-station-focus" disabled>Focus</button>
+          <button type="button" class="minor-button" id="manual-station-remove" disabled>Remove</button>
+        </div>
       </div>
       <div class="selection-strip">
         <div class="selection-identity"><strong id="selected-name">Ridgecrest</strong><span id="selected-distance"></span></div>
@@ -89,16 +94,6 @@
           <summary><span>Stations</span><span class="chevron" aria-hidden="true"></span></summary>
           <div class="section-body">
             <div class="section-actions"><button type="button" id="enable-all" class="minor-button">Enable all</button><button type="button" id="disable-all" class="minor-button">Disable all</button><span id="station-count" class="list-count">15 / 15</span></div>
-            <div class="list-subhead impact-title"><span>Manual station experiment</span><span class="impact-actions"><button type="button" class="minor-button" id="manual-station-focus">Focus</button><button type="button" class="minor-button" id="manual-station-remove">Remove</button></span></div>
-            <div class="impact-caption">Right-click the map to place or move one hypothetical station (NEW1). Constant velocity only. This tests the Station importance network; the Candidate station map remains relative to the original 15 stations.</div>
-            <label class="manual-guide-toggle"><input type="checkbox" id="manual-station-guide" checked><span>Show original kth → (k+1)th P-arrival distance band</span></label>
-            <div class="manual-site-summary" id="manual-site-summary" role="status" aria-live="polite">Right-click anywhere on the map to test a station location.</div>
-            <div class="manual-site-stats" id="manual-site-stats">
-              <div><span>Original removal loss</span><strong id="manual-gap-before">—</strong></div>
-              <div><span>With NEW1</span><strong id="manual-gap-after">—</strong></div>
-              <div><span>Sensitivity reduction</span><strong id="manual-gap-change">—</strong></div>
-            </div>
-            <div class="manual-site-detail" id="manual-site-detail">Choose a location inside the dashed distance band to test whether the new station fills the arrival-time gap.</div>
             <div class="list-subhead impact-title"><span>Candidate station map</span><span class="impact-actions"><button type="button" class="minor-button" id="candidate-focus">Focus</button><button type="button" class="minor-button" id="candidate-export">CSV</button><button type="button" class="minor-button impact-map-switch" id="candidate-map-toggle" aria-pressed="true">Overlay on</button></span></div>
             <div class="candidate-controls">
               <label class="mini-field" for="candidate-source-mode"><span id="candidate-source-label">Current event</span><select id="candidate-source-mode"><option value="event">Current event</option><option value="manual">Manual source</option></select></label>
