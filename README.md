@@ -1,4 +1,4 @@
-# EEW Lab V0.4.9
+# EEW Lab V0.4.10
 
 [Open website](https://csfs64.github.io/EPS131/) · [Methods](docs/methodology.md)
 
@@ -123,3 +123,7 @@ Displayed colors can be smoothly interpolated or shown as discrete Cells; all ra
 ## Candidate station metrics and spatial structure (V0.4.9)
 
 The site map distinguishes `Alert gain` from `Trigger margin`. The first is the reduction in modeled alert delivery time from adding a candidate to the k-station network. With one fixed source and identical station latencies, once the candidate P arrival precedes the current (k−1)th station, the gain cannot increase: a broad maximum-gain plateau is the correct calculation rather than a plotting defect. `Trigger margin` instead measures the candidate P arrival ahead of the current kth station. It continues to vary spatially within the plateau, but **is not additional seconds saved**. Red/yellow means early positive margin; cyan/blue means the candidate is behind the current kth station. Regional mode averages metrics across a deterministic, equally weighted set of 21 hypothetical source positions within the user-selected radius; it is not an empirical earthquake probability forecast. The smooth heatmap visually interpolates evaluated grid points without inventing new model inputs or travel-time observations. Both gain and margin are exported to CSV. A single fixed source under a homogeneous velocity model remains radially symmetric even in the more informative margin visualization.
+
+## Control integrity
+
+The candidate heatmap metric selector and color-scale fields are now present in the HTML. The DOM contract test verifies that all directly referenced control IDs exist and remain unique.

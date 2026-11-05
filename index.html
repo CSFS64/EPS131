@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#087f91">
 <title>EEW Lab</title>
+<link rel="icon" href="data:,">
 <link rel="stylesheet" href="./css/style.css">
 <link rel="stylesheet" href="./css/aleks-controls.css">
 <link rel="stylesheet" href="./css/heatmap.css">
@@ -34,7 +35,7 @@
         <div class="map-legend"><span><i class="line-swatch p"></i>P</span><span><i class="line-swatch s"></i>S</span><span><i class="station-swatch"></i>Station</span></div>
         <div class="map-importance-key" id="map-importance-key" hidden><span>Station impact</span><i class="impact-swatch zero"></i><i class="impact-swatch low"></i><i class="impact-swatch medium"></i><i class="impact-swatch high"></i><i class="impact-swatch highest"></i><i class="impact-swatch lost" title="No alert"></i></div>
         <div class="candidate-pointer" id="candidate-pointer" hidden></div>
-        <div class="map-candidate-key" id="map-candidate-key" hidden><span>Earlier alert with new station</span><div class="candidate-colorbar"></div><div class="candidate-scale"><span>0 s</span><span id="candidate-scale-mid">0.00 s</span><span id="candidate-scale-max">0.00 s</span></div></div>
+        <div class="map-candidate-key" id="map-candidate-key" hidden><span id="candidate-scale-title">Mean trigger margin</span><div class="candidate-colorbar margin" id="candidate-colorbar"></div><div class="candidate-scale"><span id="candidate-scale-min">0 s</span><span id="candidate-scale-mid">0.00 s</span><span id="candidate-scale-max">0.00 s</span></div></div>
         <div class="map-attribution" id="map-attribution">Imagery © Esri, Maxar, Earthstar Geographics, GIS User Community</div>
       </div>
       <div class="map-layers">
@@ -94,6 +95,7 @@
               <label class="mini-field" for="candidate-analysis"><span>Analysis</span><select id="candidate-analysis"><option value="regional" selected>Regional scenarios</option><option value="single">Single source</option></select></label>
               <label class="mini-field" id="candidate-radius-field" for="candidate-radius"><span>Radius</span><select id="candidate-radius"><option value="20">20 km</option><option value="35" selected>35 km</option><option value="50">50 km</option></select></label>
               <label class="mini-field" for="candidate-grid"><span>Grid</span><select id="candidate-grid"><option value="coarse">Coarse</option><option value="medium" selected>Medium</option><option value="fine">Fine</option></select></label>
+              <label class="mini-field" for="candidate-metric"><span>Metric</span><select id="candidate-metric"><option value="margin" selected>Trigger margin</option><option value="gain">Alert gain</option></select></label>
               <label class="mini-field" for="candidate-display"><span>Display</span><select id="candidate-display"><option value="smooth" selected>Smooth</option><option value="cells">Cells</option></select></label>
               <button type="button" id="candidate-use-center" class="minor-button">Use map center</button>
             </div>
