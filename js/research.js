@@ -1,4 +1,4 @@
-import {calculateNetwork, travelTimeS} from './physics.js';
+import {calculateNetwork, travelTimeS, destination} from './physics.js';
 import {evaluateArrivals} from './observations.js';
 
 export function modelComparisons(data, params, disabled, observed, predictions) {
@@ -104,11 +104,59 @@ export function candidateCellColor(cell,maxGain=1){
   return candidateGainColor(cell,maxGain,1);
 }
 
-export function candidateStationMap(data, params, disabled, source, stepDeg=.1) {
+const marginPaletteNegative=[[27,55,157],[18,108,212],[18,194,214],[238,249,251]];
+const marginPalettePositive=[[250,250,239],[250,212,47],[255,132,28],[220,44,42]];
+
+function mixColor(stops,fraction){
+  const v=Math.max(0,Math.min(1,fraction))*(stops.length-1);
+  const k=Math.min(stops.length-2,Math.floor(v));
+  return stops[k].map((a,i)=>Math.round(a+(stops[k+1][i]-a)*(v-k)));
+}
+
+export function candidateMarginColor(cell,minMargin,maxMargin,opacity=1){
+  if(!cell)return `rgba(160,165,174,${opacity})`;
+  if(cell.status==='recover')return `rgba(153,68,205,${opacity})`;
+  if(cell.status==='none'||!Number.isFinite(cell.margin))return `rgba(135,141,155,${opacity})`;
+  const x=cell.margin;
+  const rgb=x>=0?mixColor(marginPalettePositive,maxMargin>0?x/maxMargin:0):mixColor(marginPaletteNegative,minMargin<0?(x-minMargin)/(-minMargin):1);
+  return `rgba(${rgb.join(',')},${opacity})`;
+}
+
+export function applyCandidateMetric(grid,metric='gain'){
+  if(!grid)return null;
+  for(const cell of grid.cells){
+    cell.overlayColor=metric==='margin'?candidateMarginColor(cell,grid.minMargin,grid.maxMargin,.82):candidateGainColor(cell,grid.maxGain,cell.status==='gain'?.82:.48);
+  }
+  grid.metric=metric;
+  return grid;
+}
+
+export function scenarioSources(center, mode='single', radiusKm=35) {
+  if(mode!=='regional'||radiusKm<=0)return [{...center}];
+  const sources=[{...center}];
+  for(const [distance,number,offset] of [[radiusKm*.52,8,11.25],[radiusKm*.88,12,0]]){
+    for(let i=0;i<number;i++){
+      const point=destination(center.latitude,center.longitude,offset+360*i/number,distance);
+      sources.push({...center,latitude:point.latitude,longitude:point.longitude,id:`scenario-${sources.length}`});
+    }
+  }
+  return sources;
+}
+
+export function candidateStationMap(data, params, disabled, source, stepDeg=.1, options={}) {
+  const mode=options.mode==='regional'?'regional':'single';
+  const radiusKm=Number.isFinite(options.radiusKm)?Math.max(0,options.radiusKm):35;
   const sourceData={...data,event:{...source,id:source.id??'manual',magnitude:source.magnitude??data.event.magnitude,originUTC:source.originUTC??data.event.originUTC}};
   const baseline=calculateNetwork(sourceData,params,disabled);
-  const active=baseline.stations.filter(s=>s.enabled&&Number.isFinite(s.available)).sort((a,b)=>a.available-b.available);
-  const bounds=candidateBounds(data,sourceData.event);
+  const center=sourceData.event;
+  const sources=scenarioSources(center,mode,radiusKm);
+  const scenarios=sources.map(s=>{
+    const network=calculateNetwork({...data,event:s},params,disabled);
+    const active=network.stations.filter(st=>st.enabled&&Number.isFinite(st.available)).sort((a,b)=>a.available-b.available);
+    const kth=params.triggersRequired;
+    return {source:s,available:active.length,previous:kth>1?active[kth-2]?.available??null:-Infinity,kth:active[kth-1]?.available??null};
+  });
+  const bounds=candidateBounds(data,center);
   const cells=[];
   const detection=params.detectionDelayS+params.networkDelayS;
   const kth=params.triggersRequired;
@@ -118,24 +166,38 @@ export function candidateStationMap(data, params, disabled, source, stepDeg=.1) 
     const lat=Number((bounds.maxLat-r*stepDeg).toFixed(6));
     for(let c=0;c<cols;c++){
       const lon=Number((bounds.minLon+c*stepDeg).toFixed(6));
-      const p=travelTimeS(sourceData.event,{latitude:lat,longitude:lon},params.vpKmS);
-      const available=p+detection;
-      const augmented=[...active,{id:'candidate',code:'NEW',latitude:lat,longitude:lon,p,available,enabled:true}].sort((a,b)=>a.available-b.available);
-      const rank=augmented.findIndex(x=>x.id==='candidate')+1;
-      const kthStation=augmented[kth-1]??null;
-      const delivered=kthStation?kthStation.available+params.processingDelayS+params.deliveryDelayS:null;
-      let status='nochange',gain=0;
-      if(baseline.delivered===null && delivered!==null){status='recover';gain=null;}
-      else if(delivered===null){status='none';gain=null;}
-      else {
-        gain=Math.max(0,(baseline.delivered??delivered)-delivered);
-        status=gain>1e-9?'gain':'nochange';
+      let sum=0,positive=0,valid=0,recover=0,unavailable=0,marginSum=0,marginCount=0;
+      let p=null,available=null,rank=null,delivered=null;
+      for(let j=0;j<scenarios.length;j++){
+        const scenario=scenarios[j];
+        const travel=travelTimeS(scenario.source,{latitude:lat,longitude:lon},params.vpKmS);
+        const arrival=travel+detection;
+        if(j===0){
+          p=travel;available=arrival;
+          rank=baseline.stations.filter(st=>st.enabled&&Number.isFinite(st.available)&&st.available<=arrival).length+1;
+        }
+        if(scenario.kth===null){
+          if(scenario.available+1===kth)recover++;
+          else unavailable++;
+          continue;
+        }
+        if(scenario.previous===null){unavailable++;continue;}
+        marginSum+=scenario.kth-arrival;marginCount++;
+        const gain=Math.max(0,scenario.kth-Math.max(scenario.previous,Math.min(arrival,scenario.kth)));
+        sum+=gain;valid++;
+        if(gain>1e-9)positive++;
+        if(j===0)delivered=(scenario.kth-gain)+params.processingDelayS+params.deliveryDelayS;
       }
-      cells.push({lat,lon,p,available,rank,delivered,gain,status,stepDeg});
+      let status='nochange',gain=valid?sum/valid:null;
+      if(valid===0)status=recover>0?'recover':'none';
+      else if(gain>1e-9)status='gain';
+      cells.push({lat,lon,p,available,rank,delivered,gain,margin:marginCount?marginSum/marginCount:null,status,stepDeg,positiveFraction:valid?positive/valid:0,validScenarios:valid});
     }
   }
   const maxGain=Math.max(0,...cells.map(cell=>cell.gain||0));
-  for(const cell of cells)cell.overlayColor=candidateGainColor(cell,maxGain,cell.status==='gain'?.82:.48);
-  const top=cells.filter(cell=>cell.status==='gain').sort((a,b)=>b.gain-a.gain||a.rank-b.rank).slice(0,8);
-  return {source:sourceData.event,baseline,bounds,stepDeg,rows,cols,cells,top,maxGain,coverage:`${rows} × ${cols}`};
+  const margins=cells.map(cell=>cell.margin).filter(Number.isFinite);
+  const minMargin=margins.length?Math.min(...margins):0;
+  const maxMargin=margins.length?Math.max(...margins):0;
+  const top=cells.filter(cell=>cell.status==='gain').sort((a,b)=>b.gain-a.gain||b.positiveFraction-a.positiveFraction||a.rank-b.rank).slice(0,8);
+  return applyCandidateMetric({source:center,baseline,bounds,stepDeg,rows,cols,cells,top,maxGain,minMargin,maxMargin,coverage:`${rows} × ${cols}`,mode,radiusKm,scenarios:sources.length},'gain');
 }

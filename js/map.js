@@ -38,6 +38,10 @@ export class EEWMap {
     this.candidateEnabled = false;
     this.candidateCells = [];
     this.candidateSource = null;
+    this.candidateGrid = null;
+    this.candidateRaster = null;
+    this.candidateDisplay = 'smooth';
+    this.onCandidateHover = null;
     this.pointer = null;
     this.hover = null;
     this.hitTargets = [];
@@ -73,6 +77,32 @@ export class EEWMap {
     this.render();
   }
   focus(lat, lon, zoom = this.zoom) { this.lat = lat; this.lon = lon; this.zoom = zoom; this.render(); }
+  setCandidateGrid(grid) {
+    this.candidateGrid=grid;
+    this.candidateCells=grid?.cells??[];
+    this.candidateRaster=null;
+    if(!grid)return;
+    const raster=document.createElement('canvas');
+    raster.width=grid.cols;raster.height=grid.rows;
+    const rc=raster.getContext('2d');
+    const img=rc.createImageData(grid.cols,grid.rows);
+    for(let i=0;i<grid.cells.length;i++){
+      const color=grid.cells[i].overlayColor||'rgba(27,55,157,.5)';
+      const rgba=color.match(/[\d.]+/g)?.map(Number)||[27,55,157,.5];
+      img.data[i*4]=rgba[0];img.data[i*4+1]=rgba[1];img.data[i*4+2]=rgba[2];img.data[i*4+3]=Math.round((rgba[3]??1)*255);
+    }
+    rc.putImageData(img,0,0);
+    this.candidateRaster=raster;
+  }
+  candidateCellAt(x,y){
+    const g=this.candidateGrid;
+    if(!this.candidateEnabled||!g)return null;
+    const ll=this.screenToGeo(x,y);
+    const c=Math.round((ll.longitude-g.bounds.minLon)/g.stepDeg);
+    const r=Math.round((g.bounds.maxLat-ll.latitude)/g.stepDeg);
+    if(r<0||c<0||r>=g.rows||c>=g.cols)return null;
+    return g.cells[r*g.cols+c]??null;
+  }
   bindInput() {
     this.canvas.addEventListener('wheel', e => {
       e.preventDefault();
@@ -96,6 +126,7 @@ export class EEWMap {
         const x = e.clientX - rect.left, y = e.clientY - rect.top;
         this.hover = this.hitTargets.find(t => Math.hypot(t.x - x, t.y - y) < t.r + 5) ?? null;
         this.canvas.style.cursor = this.hover ? 'pointer' : 'grab';
+        this.onCandidateHover?.(this.hover?null:this.candidateCellAt(x,y),x,y);
       }
     });
     this.canvas.addEventListener('pointerup', e => {
@@ -104,10 +135,12 @@ export class EEWMap {
         const x = e.clientX - rect.left, y = e.clientY - rect.top;
         const hit = [...this.hitTargets].reverse().find(t => Math.hypot(t.x-x,t.y-y) < t.r+7);
         if (hit) this.onSelect(hit.kind, hit.id, hit.payload);
+        else {const cell=this.candidateCellAt(x,y);if(cell)this.onSelect('candidate','candidate',cell);}
       }
       this.pointer = null; this.canvas.classList.remove('dragging');
     });
     this.canvas.addEventListener('pointercancel', () => {this.pointer=null;this.canvas.classList.remove('dragging');});
+    this.canvas.addEventListener('pointerleave',()=>this.onCandidateHover?.(null,0,0));
   }
   render() {
     if (!this.width || !this.height) return;
@@ -126,7 +159,7 @@ export class EEWMap {
     for (const city of this.results?.cities ?? []) this.drawCity(c,city);
     if (this.showStations) for (const station of this.results?.stations ?? []) this.drawStation(c,station);
     this.drawEpicenter(c,ev);
-    if (this.candidateEnabled && this.candidateSource) this.drawCandidateSource(c,this.candidateSource);
+    if (this.candidateEnabled && this.candidateSource && (Math.abs(this.candidateSource.latitude-ev.latitude)>1e-5||Math.abs(this.candidateSource.longitude-ev.longitude)>1e-5)) this.drawCandidateSource(c,this.candidateSource);
   }
   drawGrid(c) {
     c.strokeStyle = '#c1d3d7';c.lineWidth = .75;
@@ -177,6 +210,18 @@ export class EEWMap {
     c.closePath();c.stroke(); c.restore();
   }
   drawCandidateCells(c){
+    const g=this.candidateGrid;
+    if(this.candidateDisplay==='smooth'&&this.candidateRaster&&g){
+      const half=g.stepDeg/2;
+      const nw=this.screenPosition(g.bounds.maxLat+half,g.bounds.minLon-half);
+      const se=this.screenPosition(g.bounds.maxLat-(g.rows-1)*g.stepDeg-half,g.bounds.minLon+(g.cols-1)*g.stepDeg+half);
+      c.save();
+      c.imageSmoothingEnabled=true;
+      c.imageSmoothingQuality='high';
+      c.drawImage(this.candidateRaster,nw.x,nw.y,se.x-nw.x,se.y-nw.y);
+      c.restore();
+      return;
+    }
     c.save();
     for(const cell of this.candidateCells){
       const half=cell.stepDeg/2;

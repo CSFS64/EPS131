@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {modelComparisons,timingStages,alertStations,topResiduals,stationImportance,importanceColor,candidateStationMap} from '../js/research.js';
+import {modelComparisons,timingStages,alertStations,topResiduals,stationImportance,importanceColor,candidateStationMap,scenarioSources,applyCandidateMetric,candidateMarginColor} from '../js/research.js';
 import {calculateNetwork} from '../js/physics.js';
 import {normalizeObservations} from '../js/observations.js';
 const events=JSON.parse(readFileSync(new URL('../data/events.json',import.meta.url)));
@@ -123,4 +123,53 @@ test('candidate map value scale updates with the earthquake event',()=>{
  const b=candidateStationMap(second,second.model,new Set(),second.event,.055);
  assert.notEqual(a.maxGain,b.maxGain);
  assert.equal(a.cells.filter(cell=>cell.status==='gain').every(cell=>cell.gain>0),true);
+});
+
+
+test('single-source candidate plateau follows kth-minus-previous arrival gap',()=>{
+ const g=candidateStationMap(data,data.model,new Set(),data.event,.055,{mode:'single'});
+ const times=g.baseline.stations.filter(s=>s.enabled).map(s=>s.available).sort((a,b)=>a-b);
+ const k=data.model.triggersRequired;
+ assert.ok(Math.abs(g.maxGain-(times[k-1]-times[k-2]))<1e-9);
+ assert.ok(g.cells.filter(c=>c.gain!==null&&Math.abs(c.gain-g.maxGain)<1e-4).length>8);
+});
+
+test('regional ensemble yields varied actual gains and is deterministic',()=>{
+ const s=scenarioSources(data.event,'regional',35);
+ assert.equal(s.length,21);
+ const a=candidateStationMap(data,data.model,new Set(),data.event,.055,{mode:'regional',radiusKm:35});
+ const b=candidateStationMap(data,data.model,new Set(),data.event,.055,{mode:'regional',radiusKm:35});
+ assert.equal(a.scenarios,21);
+ assert.deepEqual(a.top.slice(0,4),b.top.slice(0,4));
+ assert.ok(new Set(a.cells.map(c=>(c.gain??-1).toFixed(3))).size>35);
+ assert.ok(a.cells.some(c=>c.positiveFraction>0&&c.positiveFraction<1));
+});
+
+test('regional map responds to source radius and uses common latency cancellation',()=>{
+ const a=candidateStationMap(data,data.model,new Set(),data.event,.1,{mode:'regional',radiusKm:20});
+ const b=candidateStationMap(data,data.model,new Set(),data.event,.1,{mode:'regional',radiusKm:50});
+ const later=candidateStationMap(data,{...data.model,deliveryDelayS:data.model.deliveryDelayS+9},new Set(),data.event,.1,{mode:'regional',radiusKm:20});
+ assert.notEqual(a.maxGain,b.maxGain);
+ assert.deepEqual(a.cells.map(c=>c.gain),later.cells.map(c=>c.gain));
+});
+
+
+test('trigger margin continues varying inside actual gain plateau',()=>{
+ const grid=candidateStationMap(data,data.model,new Set(),data.event,.035,{mode:'single'});
+ const plateau=grid.cells.filter(c=>c.gain!==null&&Math.abs(c.gain-grid.maxGain)<1e-8);
+ assert.ok(plateau.length>10);
+ assert.ok(Math.max(...plateau.map(c=>c.margin))-Math.min(...plateau.map(c=>c.margin))>.2);
+ const oldGains=grid.cells.map(c=>c.gain);
+ applyCandidateMetric(grid,'margin');
+ assert.ok(grid.cells.some(c=>c.overlayColor!==candidateMarginColor(c,grid.minMargin,grid.maxMargin,.82))===false);
+ assert.deepEqual(grid.cells.map(c=>c.gain),oldGains);
+});
+
+test('regional margin reflects deterministic source ensemble',()=>{
+ const regional=candidateStationMap(data,data.model,new Set(),data.event,.1,{mode:'regional',radiusKm:35});
+ const single=candidateStationMap(data,data.model,new Set(),data.event,.1,{mode:'single'});
+ assert.equal(regional.scenarios,21);
+ assert.notDeepEqual(regional.cells.map(c=>c.margin),single.cells.map(c=>c.margin));
+ assert.ok(regional.minMargin<0);
+ assert.ok(regional.maxMargin>0);
 });

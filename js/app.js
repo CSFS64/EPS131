@@ -1,7 +1,7 @@
 import {calculateNetwork} from './physics.js';
 import {EEWMap} from './map.js';
 import {parseSTP,normalizeObservations,evaluateArrivals} from './observations.js';
-import {modelComparisons,timingStages,alertStations,topResiduals,stationImportance,importanceColor,candidateStationMap,candidateCellColor} from './research.js';
+import {modelComparisons,timingStages,alertStations,topResiduals,stationImportance,importanceColor,candidateStationMap,candidateCellColor,applyCandidateMetric,candidateMarginColor} from './research.js';
 
 const $=id=>document.getElementById(id);
 const settings={vp:['vpKmS',true],vs:['vsKmS',true],'trigger-count':['triggersRequired',false],'detect-delay':['detectionDelayS',false],'network-delay':['networkDelayS',false],'process-delay':['processingDelayS',false],'delivery-delay':['deliveryDelayS',false]};
@@ -15,7 +15,7 @@ const candidateSteps={coarse:.10,medium:.055,fine:.035};
 let data,defaults,params,results,map,observed=null,validation=null,modelType='constant',modelData={},cases=[],observationsCache={},selectionEpoch=0;
 let elapsed=0,playing=false,speed=1,lastFrame=0,selected={kind:'city',id:'ridgecrest'},toastHandle,importance=null;
 let candidateGrid=null;
-const candidateState={sourceMode:'event',manual:{latitude:35.705,longitude:-117.505,depthKm:10},stepKey:'medium',enabled:true};
+const candidateState={sourceMode:'event',manual:{latitude:35.705,longitude:-117.505,depthKm:10},stepKey:'medium',analysis:'regional',radiusKm:35,metric:'margin',enabled:true};
 const disabled=new Set();
 
 function notify(text,error=false){
@@ -31,6 +31,16 @@ async function init(){
     data={...collection,event:cases[0]};params={...collection.model};defaults={...params};
     candidateState.manual={latitude:data.event.latitude,longitude:data.event.longitude,depthKm:data.event.depthKm};
     map=new EEWMap($('map'),select);map.data=data;map.selection=selected;
+    map.onCandidateHover=(cell,x,y)=>{
+      const tip=$('candidate-pointer');
+      if(!cell||!map.candidateEnabled){tip.hidden=true;return;}
+      const value=cell.gain===null?'—':`+${cell.gain.toFixed(3)} s`;
+      const margin=cell.margin===null?'—':`${cell.margin>=0?'+':''}${cell.margin.toFixed(3)} s`;
+      tip.textContent=`${cell.lat.toFixed(3)}, ${cell.lon.toFixed(3)} · Gain ${value} · Margin ${margin}${candidateState.analysis==='regional'?` · ${Math.round(cell.positiveFraction*100)}% improved`:''}`;
+      tip.style.left=Math.max(4,Math.min(map.width-250,x+12))+'px';
+      tip.style.top=Math.max(4,Math.min(map.height-42,y-40))+'px';
+      tip.hidden=false;
+    };
     $('candidate-lat').value=String(candidateState.manual.latitude.toFixed(3));
     $('candidate-lon').value=String(candidateState.manual.longitude.toFixed(3));
     $('candidate-depth').value=String(candidateState.manual.depthKm.toFixed(1));
@@ -221,15 +231,16 @@ function updateCandidateMap(){
   $('candidate-manual-fields').hidden=candidateState.sourceMode!=='manual';
   $('candidate-source-label').textContent=candidateState.sourceMode==='event'?'Current event':'Manual source';
   if(!source){
-    candidateGrid=null;map.candidateCells=[];map.candidateSource=null;updateCandidatePanel('Invalid source values');return;
+    candidateGrid=null;map.setCandidateGrid(null);map.candidateSource=null;updateCandidatePanel('Invalid source values');return;
   }
   if(modelType!=='constant'){
-    candidateGrid=null;map.candidateCells=[];map.candidateSource=candidateState.enabled?source:null;updateCandidatePanel('Available in Constant velocity mode');return;
+    candidateGrid=null;map.setCandidateGrid(null);map.candidateSource=candidateState.enabled?source:null;updateCandidatePanel('Available in Constant velocity mode');return;
   }
-  candidateGrid=candidateStationMap(data,params,disabled,source,candidateSteps[candidateState.stepKey]);
-  map.candidateCells=candidateState.enabled?candidateGrid.cells:[];
+  candidateGrid=candidateStationMap(data,params,disabled,source,candidateSteps[candidateState.stepKey],{mode:candidateState.analysis,radiusKm:candidateState.radiusKm});
+  applyCandidateMetric(candidateGrid,candidateState.metric);
+  map.setCandidateGrid(candidateState.enabled?candidateGrid:null);
   map.candidateSource=candidateState.enabled?source:null;
-  updateCandidatePanel(`${candidateGrid.coverage} cells · best ${candidateGrid.top[0]?.gain?.toFixed(2)??'0.00'} s`);
+  updateCandidatePanel(`${candidateGrid.coverage} sites · ${candidateGrid.scenarios} source${candidateGrid.scenarios===1?'':'s'} · maximum ${candidateGrid.maxGain.toFixed(2)} s`);
 }
 
 function updateCandidatePanel(statusText=''){
@@ -239,15 +250,32 @@ function updateCandidatePanel(statusText=''){
   $('candidate-map-toggle').textContent=overlayActive?'Overlay on':'Overlay off';
   $('candidate-status').textContent=statusText||'No grid';
   $('map-candidate-key').hidden=!overlayActive;
+  $('candidate-pointer').hidden=true;
+  $('candidate-radius-field').hidden=candidateState.analysis!=='regional';
+  $('candidate-description').textContent=candidateState.analysis==='regional'?`Mean delivery-time gain across ${candidateGrid?.scenarios??21} deterministic source locations within ${candidateState.radiusKm} km. Equal weights; not an earthquake probability forecast.`:'Exact delivery-time gain for the selected source. Equal gains across many locations are expected.';
   const maxGain=candidateGrid?.maxGain??0;
-  $('candidate-scale-max').textContent=maxGain.toFixed(2)+' s';
-  $('candidate-scale-mid').textContent=(maxGain/2).toFixed(2)+' s';
+  if(candidateState.metric==='margin'){
+    $('candidate-scale-title').textContent=candidateState.analysis==='regional'?'Mean trigger margin':'Trigger margin';
+    $('candidate-scale-min').textContent=(candidateGrid?.minMargin??0).toFixed(1)+' s';
+    $('candidate-scale-mid').textContent='0 s';
+    $('candidate-scale-max').textContent='+'+(candidateGrid?.maxMargin??0).toFixed(1)+' s';
+    $('candidate-colorbar').classList.add('margin');
+    $('candidate-description').textContent=candidateState.analysis==='regional'?`Mean P-arrival advantage over kth station across ${candidateGrid?.scenarios??21} equally weighted hypothetical sources. This is not time saved.`:'P arrival advantage over the existing kth station. This is not time saved.';
+  }else{
+    $('candidate-scale-title').textContent=candidateState.analysis==='regional'?'Mean alert gain':'Alert gain';
+    $('candidate-scale-min').textContent='0 s';
+    $('candidate-scale-mid').textContent=(maxGain/2).toFixed(2)+' s';
+    $('candidate-scale-max').textContent=maxGain.toFixed(2)+' s';
+    $('candidate-colorbar').classList.remove('margin');
+    $('candidate-description').textContent=candidateState.analysis==='regional'?`Mean actual delivery-time saving across ${candidateGrid?.scenarios??21} equally weighted hypothetical sources; not observed probabilities.`:'Actual delivery-time saving. The flat maximum-gain area is mathematically expected with a kth-station trigger.';
+  }
   const root=$('candidate-top-list');root.replaceChildren();
-  if(!candidateGrid?.top?.length){root.append(make('div','field-hint',modelType==='constant'?'No high-gain cells in view':'Switch to Constant velocity'));return;}
-  for(const cell of candidateGrid.top){
+  const ranked=candidateState.metric==='margin'?candidateGrid?.cells.filter(c=>Number.isFinite(c.margin)).slice().sort((a,b)=>b.margin-a.margin).slice(0,8):candidateGrid?.top;
+  if(!ranked?.length){root.append(make('div','field-hint',modelType==='constant'?'No candidate values available':'Switch to Constant velocity'));return;}
+  for(const cell of ranked){
     const btn=make('button','candidate-row');btn.type='button';
-    const left=make('span','candidate-main');left.append(make('b','',`${cell.lat.toFixed(2)}, ${cell.lon.toFixed(2)}`),make('small','',`rank ${cell.rank}`));
-    const gain=make('strong','',`+${cell.gain.toFixed(2)} s`);
+    const left=make('span','candidate-main');left.append(make('b','',`${cell.lat.toFixed(2)}, ${cell.lon.toFixed(2)}`),make('small','',candidateState.analysis==='regional'?`${Math.round(cell.positiveFraction*100)}% of scenarios improved`:`rank ${cell.rank}`));
+    const gain=make('strong','',candidateState.metric==='margin'?`${cell.margin>=0?'+':''}${cell.margin.toFixed(2)} s`:`+${cell.gain.toFixed(2)} s`);
     btn.append(left,gain);
     btn.style.borderColor=candidateCellColor(cell,candidateGrid.maxGain);
     btn.addEventListener('click',()=>map.focus(cell.lat,cell.lon,Math.max(map.zoom,8.5)));
@@ -349,6 +377,10 @@ function updateInspector(){
     $('selected-name').textContent=station.id;
     $('selected-distance').textContent=station.distanceKm.toFixed(1)+' km';
     $('lead-label').textContent='P arrival';display.textContent=f2(station.p);
+  }else if(selected.kind==='candidate'){
+    $('selected-name').textContent='Candidate site';
+    $('selected-distance').textContent=`${selected.lat.toFixed(3)}, ${selected.lon.toFixed(3)}`;
+    $('lead-label').textContent=candidateState.analysis==='regional'?'Mean gain':'Gain';display.textContent=f2(selected.gain);
   }else if(selected.kind==='event'){
     $('selected-name').textContent='Ridgecrest';
     $('selected-distance').textContent=data.event.id;
@@ -395,8 +427,8 @@ function renderResidual(){
   $('residual-summary').textContent=`P ${validation.p.n} · S ${validation.s.n}`;
 }
 
-function select(kind,id){
-  selected={kind,id};map.selection=selected;
+function select(kind,id,payload=null){
+  selected=kind==='candidate'&&payload?{kind,id,...payload}:{kind,id};map.selection=selected;
   updateStationList();updateCityList();updateInspector();map.render();
 }
 
@@ -432,8 +464,8 @@ function restoreSettings(){
 function exportCandidateCSV(){
   if(!candidateGrid){notify('Candidate grid unavailable',true);return;}
   const source=currentCandidateSource();
-  const rows=[['Source mode',candidateState.sourceMode],['Latitude',source.latitude],['Longitude',source.longitude],['Depth km',source.depthKm],['Grid step deg',candidateSteps[candidateState.stepKey]],['Trigger stations',params.triggersRequired],[],['lat','lon','rank','gain_s','status','candidate_p_s','candidate_available_s']];
-  for(const cell of candidateGrid.cells)rows.push([cell.lat,cell.lon,cell.rank,cell.gain??'',cell.status,cell.p,cell.available]);
+  const rows=[['Analysis',candidateState.analysis],['Scenario count',candidateGrid.scenarios],['Scenario radius km',candidateState.analysis==='regional'?candidateState.radiusKm:0],['Displayed metric',candidateState.metric],['Source mode',candidateState.sourceMode],['Latitude',source.latitude],['Longitude',source.longitude],['Depth km',source.depthKm],['Grid step deg',candidateSteps[candidateState.stepKey]],['Trigger stations',params.triggersRequired],[],['lat','lon','rank','mean_or_single_gain_s','mean_or_single_trigger_margin_s','improved_scenario_fraction','status','candidate_p_s','candidate_available_s']];
+  for(const cell of candidateGrid.cells)rows.push([cell.lat,cell.lon,cell.rank,cell.gain??'',cell.margin??'',cell.positiveFraction,cell.status,cell.p,cell.available]);
   const csv=rows.map(r=>r.map(v=>'\"'+String(v).replace(/\"/g,'\"\"')+'\"').join(',')).join('\r\n');
   const url=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));
   const a=document.createElement('a');a.href=url;a.download=`candidate-station-grid-${candidateState.sourceMode}.csv`;
@@ -467,13 +499,17 @@ function bind(){
   $('impact-map-toggle').addEventListener('click',()=>{map.importanceEnabled=!map.importanceEnabled;map.candidateEnabled=false;candidateState.enabled=false;$('candidate-map-toggle').textContent='Overlay off';const button=$('impact-map-toggle');button.setAttribute('aria-pressed',String(map.importanceEnabled));$('map-importance-key').hidden=!map.importanceEnabled;if(map.importanceEnabled&&!map.showStations){map.showStations=true;$('toggle-stations').checked=true;}map.render();});
   $('candidate-source-mode').addEventListener('change',e=>{candidateState.sourceMode=e.target.value;refresh();});
   $('candidate-grid').addEventListener('change',e=>{candidateState.stepKey=e.target.value;refresh();});
+  $('candidate-analysis').addEventListener('change',e=>{candidateState.analysis=e.target.value;refresh();});
+  $('candidate-radius').addEventListener('change',e=>{candidateState.radiusKm=Number(e.target.value);refresh();});
+  $('candidate-display').addEventListener('change',e=>{map.candidateDisplay=e.target.value;map.render();});
+  $('candidate-metric').addEventListener('change',e=>{candidateState.metric=e.target.value;refresh();});
   $('candidate-lat').addEventListener('change',refresh);
   $('candidate-lon').addEventListener('change',refresh);
   $('candidate-depth').addEventListener('change',refresh);
   $('candidate-use-center').addEventListener('click',()=>{const center=map.screenToGeo(map.width/2,map.height/2);candidateState.sourceMode='manual';$('candidate-source-mode').value='manual';$('candidate-lat').value=center.latitude.toFixed(3);$('candidate-lon').value=center.longitude.toFixed(3);refresh();notify('Manual source moved to map center');});
   $('candidate-map-toggle').addEventListener('click',()=>{candidateState.enabled=!candidateState.enabled;if(candidateState.enabled){map.importanceEnabled=false;$('impact-map-toggle').setAttribute('aria-pressed','false');$('map-importance-key').hidden=true;}refresh();if(candidateState.enabled&&candidateGrid?.top?.[0]){const point=candidateGrid.top[0];map.focus(point.lat,point.lon,9.5);}});
   $('candidate-export').addEventListener('click',exportCandidateCSV);
-  $('candidate-focus').addEventListener('click',()=>{const point=candidateGrid?.top?.[0]??currentCandidateSource();if(!point)return;map.focus(point.lat??point.latitude,point.lon??point.longitude,10);notify('Focused on highest-gain area');});
+  $('candidate-focus').addEventListener('click',()=>{const point=candidateState.metric==='margin'?candidateGrid?.cells.filter(c=>Number.isFinite(c.margin)).sort((a,b)=>b.margin-a.margin)[0]??currentCandidateSource():candidateGrid?.top?.[0]??currentCandidateSource();if(!point)return;map.focus(point.lat??point.latitude,point.lon??point.longitude,10);notify('Focused on highest-gain area');});
   $('play').addEventListener('click',()=>{if(elapsed>=params.durationS)setElapsed(0);setPlay(!playing);});
   $('restart').addEventListener('click',()=>{setPlay(false);setElapsed(0);});
   $('scrubber').addEventListener('input',e=>setElapsed(Number(e.target.value)));
@@ -495,7 +531,7 @@ function bind(){
 }
 
 function exportCSV(){
-  const rows=[["EEW Lab V0.4.7"],["Event",data.event.id],["Model",modelType],["P velocity",params.vpKmS],["S velocity",params.vsKmS],["Trigger stations",params.triggersRequired],["Detection",params.detectionDelayS],["Telemetry",params.networkDelayS],["Processing",params.processingDelayS],["Delivery latency",params.deliveryDelayS],["Alert issue",results.issue??''],["Message delivery",results.delivered??''],[],["City","P predicted","S predicted","Delivery","S-wave lead"]];
+  const rows=[["EEW Lab V0.4.9"],["Event",data.event.id],["Model",modelType],["P velocity",params.vpKmS],["S velocity",params.vsKmS],["Trigger stations",params.triggersRequired],["Detection",params.detectionDelayS],["Telemetry",params.networkDelayS],["Processing",params.processingDelayS],["Delivery latency",params.deliveryDelayS],["Alert issue",results.issue??''],["Message delivery",results.delivered??''],[],["City","P predicted","S predicted","Delivery","S-wave lead"]];
   for(const city of results.cities)rows.push([city.name,city.p??'',city.s??'',results.delivered??'',city.lead??'']);
   rows.push([],["Station","Phase","Predicted","Observed","Residual"]);
   for(const r of validation?.comparisons||[])rows.push([r.id,r.phase,r.predicted,r.observed,r.residual]);
@@ -507,11 +543,11 @@ function exportCSV(){
     const source=currentCandidateSource();
     rows.push([],["Candidate station map"],["Source mode",candidateState.sourceMode],["Latitude",source.latitude],["Longitude",source.longitude],["Depth km",source.depthKm],["Grid step deg",candidateSteps[candidateState.stepKey]]);
     rows.push(["lat","lon","rank","gain_s","status","candidate_p_s","candidate_available_s"]);
-    for(const cell of candidateGrid.cells)rows.push([cell.lat,cell.lon,cell.rank,cell.gain??'',cell.status,cell.p,cell.available]);
+    for(const cell of candidateGrid.cells)rows.push([cell.lat,cell.lon,cell.rank,cell.gain??'',cell.margin??'',cell.positiveFraction,cell.status,cell.p,cell.available]);
   }
   const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');
   const url=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'}));
-  const a=document.createElement('a');a.href=url;a.download=`eew-lab-${data.event.id}-${modelType}-v0.4.7.csv`;
+  const a=document.createElement('a');a.href=url;a.download=`eew-lab-${data.event.id}-${modelType}-v0.4.9.csv`;
   document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),3000);notify('CSV exported');
 }
 
