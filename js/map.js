@@ -182,10 +182,10 @@ export class EEWMap {
       const half=cell.stepDeg/2;
       const nw=this.screenPosition(cell.lat+half,cell.lon-half);
       const se=this.screenPosition(cell.lat-half,cell.lon+half);
-      const x=Math.min(nw.x,se.x), y=Math.min(nw.y,se.y), w=Math.abs(se.x-nw.x), h=Math.abs(se.y-nw.y);
+      const x=Math.min(nw.x,se.x),y=Math.min(nw.y,se.y),w=Math.abs(se.x-nw.x),h=Math.abs(se.y-nw.y);
       if(x>this.width||y>this.height||x+w<0||y+h<0)continue;
-      c.fillStyle=cell.status==='recover'?'rgba(106,99,164,.5)':cell.status==='none'?'rgba(184,173,168,.25)':cell.gain<.02?'rgba(255,255,255,.08)':cell.gain<.2?'rgba(229,240,243,.28)':cell.gain<.8?'rgba(190,219,226,.36)':cell.gain<1.5?'rgba(127,184,198,.45)':'rgba(29,127,150,.57)';
-      c.fillRect(x,y,w,h);
+      c.fillStyle=cell.overlayColor||'rgba(27,55,157,.48)';
+      c.fillRect(Math.floor(x),Math.floor(y),Math.ceil(x+w)-Math.floor(x),Math.ceil(y+h)-Math.floor(y));
     }
     c.restore();
   }

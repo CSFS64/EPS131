@@ -11,7 +11,7 @@ const make=(tag,cls='',value='')=>{const e=document.createElement(tag);if(cls)e.
 const f2=n=>n===null||n===undefined||!Number.isFinite(n)?'—':n.toFixed(2)+' s';
 const signed=n=>n===null||n===undefined||!Number.isFinite(n)?'—':(n>0?'+':'')+n.toFixed(2)+' s';
 const polarity=n=>n===null?'':n<0?'negative':'positive';
-const candidateSteps={coarse:.14,medium:.1,fine:.07};
+const candidateSteps={coarse:.10,medium:.055,fine:.035};
 let data,defaults,params,results,map,observed=null,validation=null,modelType='constant',modelData={},cases=[],observationsCache={},selectionEpoch=0;
 let elapsed=0,playing=false,speed=1,lastFrame=0,selected={kind:'city',id:'ridgecrest'},toastHandle,importance=null;
 let candidateGrid=null;
@@ -239,6 +239,9 @@ function updateCandidatePanel(statusText=''){
   $('candidate-map-toggle').textContent=overlayActive?'Overlay on':'Overlay off';
   $('candidate-status').textContent=statusText||'No grid';
   $('map-candidate-key').hidden=!overlayActive;
+  const maxGain=candidateGrid?.maxGain??0;
+  $('candidate-scale-max').textContent=maxGain.toFixed(2)+' s';
+  $('candidate-scale-mid').textContent=(maxGain/2).toFixed(2)+' s';
   const root=$('candidate-top-list');root.replaceChildren();
   if(!candidateGrid?.top?.length){root.append(make('div','field-hint',modelType==='constant'?'No high-gain cells in view':'Switch to Constant velocity'));return;}
   for(const cell of candidateGrid.top){
@@ -246,7 +249,7 @@ function updateCandidatePanel(statusText=''){
     const left=make('span','candidate-main');left.append(make('b','',`${cell.lat.toFixed(2)}, ${cell.lon.toFixed(2)}`),make('small','',`rank ${cell.rank}`));
     const gain=make('strong','',`+${cell.gain.toFixed(2)} s`);
     btn.append(left,gain);
-    btn.style.borderColor=candidateCellColor(cell);
+    btn.style.borderColor=candidateCellColor(cell,candidateGrid.maxGain);
     btn.addEventListener('click',()=>map.focus(cell.lat,cell.lon,Math.max(map.zoom,8.5)));
     root.append(btn);
   }
@@ -468,8 +471,9 @@ function bind(){
   $('candidate-lon').addEventListener('change',refresh);
   $('candidate-depth').addEventListener('change',refresh);
   $('candidate-use-center').addEventListener('click',()=>{const center=map.screenToGeo(map.width/2,map.height/2);candidateState.sourceMode='manual';$('candidate-source-mode').value='manual';$('candidate-lat').value=center.latitude.toFixed(3);$('candidate-lon').value=center.longitude.toFixed(3);refresh();notify('Manual source moved to map center');});
-  $('candidate-map-toggle').addEventListener('click',()=>{candidateState.enabled=!candidateState.enabled;if(candidateState.enabled){map.importanceEnabled=false;$('impact-map-toggle').setAttribute('aria-pressed','false');$('map-importance-key').hidden=true;}refresh();});
+  $('candidate-map-toggle').addEventListener('click',()=>{candidateState.enabled=!candidateState.enabled;if(candidateState.enabled){map.importanceEnabled=false;$('impact-map-toggle').setAttribute('aria-pressed','false');$('map-importance-key').hidden=true;}refresh();if(candidateState.enabled&&candidateGrid?.top?.[0]){const point=candidateGrid.top[0];map.focus(point.lat,point.lon,9.5);}});
   $('candidate-export').addEventListener('click',exportCandidateCSV);
+  $('candidate-focus').addEventListener('click',()=>{const point=candidateGrid?.top?.[0]??currentCandidateSource();if(!point)return;map.focus(point.lat??point.latitude,point.lon??point.longitude,10);notify('Focused on highest-gain area');});
   $('play').addEventListener('click',()=>{if(elapsed>=params.durationS)setElapsed(0);setPlay(!playing);});
   $('restart').addEventListener('click',()=>{setPlay(false);setElapsed(0);});
   $('scrubber').addEventListener('input',e=>setElapsed(Number(e.target.value)));

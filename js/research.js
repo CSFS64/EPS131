@@ -78,16 +78,30 @@ export function candidateBounds(data, source, paddingDeg=.45) {
   };
 }
 
-export function candidateCellColor(cell) {
-  if(!cell)return '#ffffff';
-  if(cell.status==='recover')return '#6a63a4';
-  if(cell.status==='none')return '#efecea';
-  const value=cell.gain||0;
-  if(value<.02)return '#ffffff';
-  if(value<.2)return '#e5f0f3';
-  if(value<.8)return '#bedbe2';
-  if(value<1.5)return '#7fb8c6';
-  return '#1d7f96';
+const candidatePalette=[
+  [27,55,157],
+  [24,108,215],
+  [16,197,218],
+  [51,203,102],
+  [250,218,49],
+  [255,139,37],
+  [224,51,45]
+];
+
+export function candidateGainColor(cell,maxGain=1,opacity=1){
+  if(!cell)return `rgba(160,165,174,${opacity})`;
+  if(cell.status==='recover')return `rgba(153,68,205,${opacity})`;
+  if(cell.status==='none')return `rgba(135,141,155,${opacity})`;
+  const ratio=Math.max(0,Math.min(1,(cell.gain||0)/(maxGain>0?maxGain:1)));
+  const position=ratio*(candidatePalette.length-1);
+  const index=Math.min(candidatePalette.length-2,Math.floor(position));
+  const t=position-index;
+  const rgb=candidatePalette[index].map((v,i)=>Math.round(v+(candidatePalette[index+1][i]-v)*t));
+  return `rgba(${rgb.join(',')},${opacity})`;
+}
+
+export function candidateCellColor(cell,maxGain=1){
+  return candidateGainColor(cell,maxGain,1);
 }
 
 export function candidateStationMap(data, params, disabled, source, stepDeg=.1) {
@@ -120,6 +134,8 @@ export function candidateStationMap(data, params, disabled, source, stepDeg=.1) 
       cells.push({lat,lon,p,available,rank,delivered,gain,status,stepDeg});
     }
   }
+  const maxGain=Math.max(0,...cells.map(cell=>cell.gain||0));
+  for(const cell of cells)cell.overlayColor=candidateGainColor(cell,maxGain,cell.status==='gain'?.82:.48);
   const top=cells.filter(cell=>cell.status==='gain').sort((a,b)=>b.gain-a.gain||a.rank-b.rank).slice(0,8);
-  return {source:sourceData.event,baseline,bounds,stepDeg,rows,cols,cells,top,coverage:`${rows} × ${cols}`};
+  return {source:sourceData.event,baseline,bounds,stepDeg,rows,cols,cells,top,maxGain,coverage:`${rows} × ${cols}`};
 }

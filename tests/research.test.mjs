@@ -109,3 +109,18 @@ test('candidate station map responds to manual source depth and location',()=>{
  assert.notEqual(a.top[0].lat,b.top[0].lat);
  assert.notEqual(a.top[0].lon,b.top[0].lon);
 });
+
+test('candidate heatmap gains are mapped to the full color scale',()=>{
+ const grid=candidateStationMap(data,data.model,new Set(),data.event,.055);
+ assert.ok(grid.maxGain>0);
+ assert.ok(grid.cells.some(cell=>cell.status==='nochange'&&cell.overlayColor==='rgba(27,55,157,0.48)'));
+ assert.ok(grid.cells.some(cell=>cell.status==='gain'&&Math.abs(cell.gain-grid.maxGain)<1e-9&&cell.overlayColor==='rgba(224,51,45,0.82)'));
+});
+
+test('candidate map value scale updates with the earthquake event',()=>{
+ const second={...events,event:events.events[1]};
+ const a=candidateStationMap(data,data.model,new Set(),data.event,.055);
+ const b=candidateStationMap(second,second.model,new Set(),second.event,.055);
+ assert.notEqual(a.maxGain,b.maxGain);
+ assert.equal(a.cells.filter(cell=>cell.status==='gain').every(cell=>cell.gain>0),true);
+});
